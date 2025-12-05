@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs"
 import User from "../models/user.model.js";
-import { generateAccessToken, generateOTP, verifyAccessToken } from "../lib/utils.js";
+import { generateAccessToken, generateOTP } from "../lib/utils.js";
 import OTP from "../models/otp.model.js";
 
 export const signup = async (req,res) =>{
@@ -81,7 +81,7 @@ export const login = async (req,res) =>{
                 {email:email},
                 {phone:phone}
             ]
-        }).select('+password');
+        }).select('+password +organizationId');
 
         if(!user) {
             return res.status(400).json({message:"Invalid credentials"});
@@ -93,7 +93,7 @@ export const login = async (req,res) =>{
         }
 
         user.password = undefined;
-        const AccessToken = generateAccessToken(user._id);
+        const AccessToken = generateAccessToken(user._id,user.organizationId);
         
         return res.status(200).json({
             success: true,
@@ -106,48 +106,50 @@ export const login = async (req,res) =>{
     }
 }
 
-// eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NjQ5NjEzMDUsImV4cCI6MTc2NzU1MzMwNX0.0v1uVAAIpqRvCCIpWZ-dkMHWN3CHIuztReNwikn5LTs
+export const changePass = async (req, res) => {
+    const { oldpass, newpass } = req.body;
 
-export const changePass = async (req,res) =>{
-    const {email,phone,oldpass,newpass,token} = req.body;
-    
-    if (!oldpass || !newpass || !token || (!email && !phone)) {
-        return res.status(400).json({ message: "Email/Phone, passwords & token are required." });
+    if (!oldpass || !newpass) {
+        return res.status(400).json({
+            message: "Old password and new password are required."
+        });
+    }
+
+    if (newpass.length < 6) {
+        return res.status(400).json({
+            message: "New password must be at least 6 characters."
+        });
     }
 
     try {
-        const data = verifyAccessToken(token);
-        console.log(data);
-        const user = await User.findOne({
-            $or: [
-                {email:email},
-                {phone:phone}
-            ]
-        }).select('+password');
+        const userId = req.userId;
+        const user = await User.findById(userId).select("+password");
 
-        if(!user) {
-            return res.status(400).json({message:"Invalid credentials"});
+        if (!user) {
+            return res.status(400).json({ message: "User not found" });
         }
-        
-        const isCorrect = await bcrypt.compare(oldpass,user.password);
-        if(!isCorrect){
-            return res.status(400).json({message:"Invalid credentials"});
+
+        const isCorrect = await bcrypt.compare(oldpass, user.password);
+        if (!isCorrect) {
+            return res.status(400).json({ message: "Incorrect old password" });
         }
-        
-        const salt = await bcrypt.genSalt(10)
-        const hashedPassword = await bcrypt.hash(newpass,salt)
+
+        const hashedPassword = await bcrypt.hash(newpass, 10);
         user.password = hashedPassword;
         await user.save();
 
         return res.status(200).json({
             success: true,
-            message: "Password changed successful",
-        })
-    } catch(error){
-        console.error(error);
-        return res.status(500).json({message: "Server error" });
+            message: "Password changed successfully"
+        });
+
+    } catch (error) {
+        console.error("changePass error:", error);
+        return res.status(500).json({
+            message: "Server error"
+        });
     }
-}
+};
 
 export const requestOTP = async (req, res) => {
     const { phone, email } = req.body;
@@ -215,13 +217,19 @@ export const verifyLoginOTP = async (req,res) => {
     otpRecord.verified = true;
     await otpRecord.save();
 
-    const user = User.findOne({
-            $or: [
-                {email:email},
-                {phone:phone}
-            ]
-        });
-    const AccessToken = generateAccessToken(user._id);
+    const user = await User.findOne({
+        $or: [
+            {email:email},
+            {phone:phone}
+        ]
+    }).select('+password +organizationId');
+
+    if(!user) {
+        return res.status(400).json({message:"Invalid credentials"});
+    }
+    user.password=undefined;
+    // console.log(user._id,user.organizationId);
+    const AccessToken = generateAccessToken(user._id,user.organizationId);
 
     return res.status(200).json({ success: true, message: "OTP verified. Login successful",token: AccessToken });
 }
