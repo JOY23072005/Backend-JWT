@@ -1,0 +1,75 @@
+import mongoose from "mongoose";
+
+const userSchema = new mongoose.Schema(
+    {
+        organizationId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Organization",
+            required: true,
+            index: true,   // important for filtering by org
+        },
+
+        name: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+
+        email: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true,
+            index: true,
+        },
+
+        phone: {
+            type: String,
+            required: true,
+            trim: true,
+            index: true,
+        },
+
+        password: {
+            type: String,
+            required: true,
+            minlength: 6,
+        },
+
+        gender: {
+            type: String,
+            enum: ["Male", "Female", "Other"],
+            required: true,
+        },
+
+        dob: {
+            type: Date,
+            required: true,
+        },
+
+        employeeId: {
+            type: String,
+            default: null,
+        },
+
+        roll:{
+            type: String,
+            default: null,
+        },
+
+        role: {
+            type: String,
+            default: "user",
+            enum: ["admin", "sub-admin", "user"],
+        },
+    },
+    { timestamps: true }
+);
+
+// Compound unique index (ensures email is unique only inside the same org)
+userSchema.index({ organizationId: 1, email: 1 }, { unique: true });
+userSchema.index({ organizationId: 1, phone: 1 }, { unique: true });
+
+const User = mongoose.model("User", userSchema);
+
+export default User;

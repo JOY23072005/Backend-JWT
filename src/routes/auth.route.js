@@ -1,31 +1,16 @@
 import express from "express"
+import { changePass, login, requestOTP, signup, verifyLoginOTP, verifyOTP } from "../controllers/auth.controller.js";
 
 const AuthRoutes= express.Router();
 
-AuthRoutes.post("/signup",(req,res)=>{
-    res.send("Signup")
-});
-AuthRoutes.post("/signup/request-otp",(req,res)=>{
-    res.send("otp-request")
-});
-AuthRoutes.post("/signup/verify-otp",(req,res)=>{
-    res.send("otp-verified")
-});
+AuthRoutes.post("/signup",signup);
+AuthRoutes.post("/signup/request-otp",requestOTP);
+AuthRoutes.post("/signup/verify-otp",verifyOTP);
 
-AuthRoutes.post("/login",(req,res)=>{
-    res.send("login")
-});
-AuthRoutes.post("/login/request-otp",(req,res)=>{
-    res.send("otp-request")
-});
-AuthRoutes.post("/login/verify-otp",(req,res)=>{
-    res.send("otp-verified")
-});
+AuthRoutes.post("/login",login);
+AuthRoutes.post("/login/request-otp",requestOTP);
+AuthRoutes.post("/login/verify-otp",verifyLoginOTP);
 
-AuthRoutes.post("/logout",(req,res)=>{})
-
-AuthRoutes.post("/change-password",(req,res)=>{
-    res.send("password Changed")
-});
+AuthRoutes.post("/change-password",changePass);
 
 export default AuthRoutes;
