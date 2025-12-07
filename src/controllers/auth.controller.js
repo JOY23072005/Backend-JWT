@@ -171,6 +171,10 @@ export const requestOTP = async (req, res) => {
         return res.status(400).json({message:"User does not exist in given organisation"})
     }
 
+    if(!islogin && user){
+        return res.status(400).json({message:"User already exists. Please login"})
+    }
+
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 5 minutes
     
