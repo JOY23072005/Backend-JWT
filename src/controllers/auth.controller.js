@@ -70,8 +70,8 @@ export const signup = async (req,res) =>{
 export const login = async (req,res) =>{
     const {orgid,email,phone,password} = req.body;
 
-    if (!password || (!email && !phone)) {
-        return res.status(400).json({ message: "Email/Phone and password are required." });
+    if (!password || (!email && !phone) || !orgid) {
+        return res.status(400).json({ message: "Email/Phone and password & orgid are required." });
     }
 
     try {
