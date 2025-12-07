@@ -28,7 +28,7 @@ export const signup = async (req,res) =>{
             });
         }
 
-        const user = await User.findOne({email,organizationId: orgid})
+        const user = await User.exists({email,organizationId: orgid})
 
         if(user) return res.status(400).json({message:"Email already exists"});
 
@@ -68,7 +68,7 @@ export const signup = async (req,res) =>{
 }
 
 export const login = async (req,res) =>{
-    const {email,phone,password} = req.body;
+    const {orgid,email,phone,password} = req.body;
 
     if (!password || (!email && !phone)) {
         return res.status(400).json({ message: "Email/Phone and password are required." });
@@ -79,7 +79,8 @@ export const login = async (req,res) =>{
             $or: [
                 {email:email},
                 {phone:phone}
-            ]
+            ],
+            organizationId: orgid
         }).select('+password +organizationId');
 
         if(!user) {
@@ -151,16 +152,28 @@ export const changePass = async (req, res) => {
 };
 
 export const requestOTP = async (req, res) => {
-    const { phone, email } = req.body;
+    const { orgid, phone, email,islogin } = req.body;
 
     const identifier = phone || email;
     if (!identifier) {
         return res.status(400).json({ message: "Phone or Email is required" });
     }
 
+    const user = await User.exists({
+        $or: [
+            {email:email},
+            {phone:phone}
+        ],
+        organizationId: orgid
+    });
+
+    if(islogin && !user){
+        return res.status(400).json({message:"User does not exist in given organisation"})
+    }
+
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 5 minutes
-
+    
     // Delete old OTP for same user
     await OTP.deleteMany({ identifier });
 
@@ -175,60 +188,63 @@ export const requestOTP = async (req, res) => {
     res.json({
         success: true,
         message: "OTP sent",
-        otp
+        otp,
+        userExist:user?true:false
     });
 };
 
 export const verifyOTP = async (req, res) => {
-    const { phone, email, otp } = req.body;
+    const { orgid, phone, email, otp, islogin } = req.body;
 
     const identifier = phone || email;
 
-    const otpRecord = await OTP.findOne({ identifier });
+    try {
+        // Find OTP record
+        const otpRecord = await OTP.findOne({ identifier });
 
-    if (!otpRecord)
-        return res.status(400).json({ message: "OTP not found or expired" });
+        if (!otpRecord)
+            return res.status(400).json({ message: "OTP not found or expired" });
 
-    if (otpRecord.otp !== otp)
-        return res.status(400).json({ message: "Invalid OTP" });
+        if (otpRecord.otp !== otp)
+            return res.status(400).json({ message: "Invalid OTP" });
 
-    // mark as verified
-    otpRecord.verified = true;
-    await otpRecord.save();
+        // Mark OTP as verified
+        otpRecord.verified = true;
+        await otpRecord.save();
 
-    return res.json({ success: true, message: "OTP verified" });
-};
+        // If it's NOT a login request -> just return success
+        if (!islogin) {
+            return res.status(200).json({
+                success: true,
+                message: "OTP verified successfully"
+            });
+        }
 
-export const verifyLoginOTP = async (req,res) => {
-    const { phone, email, otp } = req.body;
+        // Login Flow ------------------------------------------
+        const user = await User.findOne({
+            $or: [{ email: email }, { phone: phone }],
+            organizationId: orgid,
+        }).select("+password +organizationId");
 
-    const identifier = phone || email;
+        if (!user) {
+            return res.status(400).json({ message: "Invalid credentials" });
+        }
 
-    const otpRecord = await OTP.findOne({ identifier });
+        // Remove password for response safety
+        user.password = undefined;
 
-    if (!otpRecord)
-        return res.status(400).json({ message: "OTP not found or expired" });
+        // Generate Access Token
+        const accessToken = generateAccessToken(user._id, user.organizationId);
 
-    if (otpRecord.otp !== otp)
-        return res.status(400).json({ message: "Invalid OTP" });
+        return res.status(200).json({
+            success: true,
+            message: "OTP verified. Login successful",
+            token: accessToken,
+            userExist: user?true:false,
+        });
 
-    // mark as verified
-    otpRecord.verified = true;
-    await otpRecord.save();
-
-    const user = await User.findOne({
-        $or: [
-            {email:email},
-            {phone:phone}
-        ]
-    }).select('+password +organizationId');
-
-    if(!user) {
-        return res.status(400).json({message:"Invalid credentials"});
+    } catch (error) {
+        console.log("Error in verifyOTP:", error.message);
+        return res.status(500).json({ message: "Server Error" });
     }
-    user.password=undefined;
-    // console.log(user._id,user.organizationId);
-    const AccessToken = generateAccessToken(user._id,user.organizationId);
-
-    return res.status(200).json({ success: true, message: "OTP verified. Login successful",token: AccessToken });
-}
+};
