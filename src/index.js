@@ -20,7 +20,7 @@ app.use(cors({
 
 app.use(express.json());
 
-app.get("/",(res,req)=>{
+app.get("/",(req,res)=>{
     res.status(200).json({message:"This is Test endpoint"})
 })
 app.use("/auth",AuthRoutes);
