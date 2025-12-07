@@ -5,6 +5,7 @@ import cors from "cors"
 import AuthRoutes from "./routes/auth.route.js";
 import UserRoutes from "./routes/user.route.js";
 import { connectDB } from "./lib/db.js";
+import OrgRoutes from "./routes/org.route.js";
 
 dotenv.config()
 const app = express();
@@ -25,7 +26,7 @@ app.get("/",(req,res)=>{
 })
 app.use("/auth",AuthRoutes);
 app.use("/user",UserRoutes);
-
+app.use("/org",OrgRoutes);
 
 const PORT = process.env.PORT
 

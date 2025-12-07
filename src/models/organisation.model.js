@@ -20,6 +20,15 @@ const organizationSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+
+        imageurl : {
+            type:String,
+        },
+
+        category : {
+            type:String,
+            required:true,
+        }
     },
     { timestamps: true }
 );

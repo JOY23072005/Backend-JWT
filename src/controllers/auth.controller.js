@@ -6,7 +6,7 @@ import OTP from "../models/otp.model.js";
 export const signup = async (req,res) =>{
     const {name,email,phone,dob,gender,orgid,empid,roll,password} = req.body;
     try {
-        if(!name || !email || !phone || !dob || !gender){
+        if(!name || !email || !dob || !gender){
             return res.status(400).json({
                 success:false,
                 message: "Please fill the mandatory fields",
@@ -21,11 +21,10 @@ export const signup = async (req,res) =>{
 
         // CHECK OTP FOR EMAIL OR PHONE (IMPORTANT FIX)
         const emailOtp = await OTP.findOne({ identifier: email, verified: true });
-        const phoneOtp = await OTP.findOne({ identifier: phone, verified: true });
 
-        if (!emailOtp && !phoneOtp) {
+        if (!emailOtp) {
             return res.status(400).json({
-                message: "OTP not verified for email or phone",
+                message: "OTP not verified for email",
             });
         }
 
