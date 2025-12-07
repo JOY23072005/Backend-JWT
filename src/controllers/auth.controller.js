@@ -6,7 +6,7 @@ import OTP from "../models/otp.model.js";
 export const signup = async (req,res) =>{
     const {name,email,phone,dob,gender,orgid,empid,roll,password} = req.body;
     try {
-        if(!name || !email || !phone || !dob || !gender || !orgid){
+        if(!name || !email || !phone || !dob || !gender){
             return res.status(400).json({
                 success:false,
                 message: "Please fill the mandatory fields",
@@ -42,7 +42,7 @@ export const signup = async (req,res) =>{
             phone:phone,
             dob:dob,
             gender:gender,
-            organizationId:orgid,
+            organizationId:orgid || "6933174a8678d7036f8754b6",
             employeeId:empid,
             roll:roll,
             password:hashedPassword,
