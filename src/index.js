@@ -10,14 +10,12 @@ import OrgRoutes from "./routes/org.route.js";
 dotenv.config()
 const app = express();
 
-const allowedOrigins = [process.env.FRONTEND_URL]; 
-
 app.use(cors({
     origin: [process.env.FRONTEND_URL, "http://localhost:3000", "http://127.0.0.1:3000"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
 }));
-
 
 app.use(express.json());
 
