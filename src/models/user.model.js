@@ -36,6 +36,11 @@ const userSchema = new mongoose.Schema(
             minlength: 6,
         },
 
+        passwordChangedAt: {
+            type: Date,
+            default: null,
+        },
+
         gender: {
             type: String,
             enum: ["Male", "Female", "Other"],
@@ -69,6 +74,13 @@ const userSchema = new mongoose.Schema(
 // Compound unique index (ensures email is unique only inside the same org)
 userSchema.index({ organizationId: 1, email: 1 }, { unique: true });
 userSchema.index({ organizationId: 1, phone: 1 }, { unique: true });
+
+userSchema.pre("save", async function () {
+    if (!this.isModified("password")) return;
+
+    // subtract 1 second to avoid race condition
+    this.passwordChangedAt = new Date(Date.now() - 1000);
+});
 
 const User = mongoose.model("User", userSchema);
 

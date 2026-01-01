@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken"
+import User from "../models/user.model.js";
 
 export const protectRoute = async (req, res, next) => {
     try {
@@ -13,10 +14,23 @@ export const protectRoute = async (req, res, next) => {
 
         const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
-        // decoded = { userId: "693346...", orgId: "...", iat:..., exp:... }
-
         if (!decoded?.userId) {
             return res.status(401).json({ message: "Invalid token" });
+        }
+
+        const user = await User.findById(decoded.userId);
+
+        if (!user) {
+            return res.status(401).json({ message: "User not found" });
+        }
+
+        if (
+            user.passwordChangedAt &&
+            decoded.iat * 1000 < user.passwordChangedAt.getTime()
+        ) {
+            return res.status(401).json({
+                message: "Password changed. Please login again."
+            });
         }
 
         req.userId = decoded.userId; // <== correct way

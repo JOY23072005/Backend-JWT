@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs"
 import User from "../models/user.model.js";
-import { generateAccessToken, generateOTP } from "../lib/utils.js";
+import { generateAccessToken, generateOTP, generateResetToken } from "../lib/utils.js";
 import OTP from "../models/otp.model.js";
+import jwt from "jsonwebtoken";
 
 export const signup = async (req,res) =>{
     const {name,email,phone,dob,gender,orgid,empid,roll,password} = req.body;
@@ -54,14 +55,17 @@ export const signup = async (req,res) =>{
             await OTP.deleteMany({ identifier: email });
             await OTP.deleteMany({ identifier: phone });
 
+            const AccessToken = generateAccessToken(user._id,user.organizationId);
+
             return res.status(201).json({
                 success: true,
-                message: "Signup successful. Please login",
-                userId: newUser._id
+                message: "Signup successful.",
+                userId: newUser._id,
+                token: AccessToken,
             });
         }
     } catch (error) {
-        console.error(error);
+        console.error("signup error:",error.message);
         return res.status(500).json({ message: "Server error" });
     }
 
@@ -97,11 +101,11 @@ export const login = async (req,res) =>{
         
         return res.status(200).json({
             success: true,
-            message: "Login successful",
+            message: "Login successful.",
             token:AccessToken,
         })
     } catch(error){
-        console.error(error);
+        console.error("login error:",error.message);
         return res.status(500).json({message: "Server error" });
     }
 }
@@ -144,7 +148,7 @@ export const changePass = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("changePass error:", error);
+        console.error("changePass error:", error.message);
         return res.status(500).json({
             message: "Server error"
         });
@@ -252,3 +256,81 @@ export const verifyOTP = async (req, res) => {
         return res.status(500).json({ message: "Server Error" });
     }
 };
+
+// forget and reset
+export const forgotPass = async (req, res) => {
+    try {
+        const { email, orgid } = req.body;
+
+        const user = await User.findOne({ email, organizationId:orgid });
+        if (!user) {
+            // we will not reveal user existence
+            return res.status(200).json({
+                message: "If the email exists, a reset link has been sent",
+            });
+        }
+
+        const resetToken = generateResetToken(user._id,orgid);
+
+        // const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+        const resetUrl = `<frontend domain, dev - localhost:PORT>/reset-password?token=${resetToken}`;
+
+        res.status(200).json({
+            message: "If the email exists, a reset link has been sent",
+            reseturl: resetUrl,
+        });
+
+    } catch (error) {
+        console.log("Error in fprget password", error.message);
+        return res.status(500).json({ message: "Server Error" });
+    }
+}
+
+export const resetPass = async (req, res) => {
+    try {
+        const { token, newpass } = req.body;
+
+        if (!token || !newpass) {
+            return res.status(400).json({ message: "Invalid request" });
+        }
+
+        if (newpass.length < 6) {
+            return res.status(400).json({
+                message: "New password must be at least 6 characters."
+            });
+        }
+
+        // console.log(process.env.RESET_TOKEN_SECRET);
+        // verifying token
+        const decoded = jwt.verify(token,process.env.RESET_TOKEN_SECRET);
+
+        const user = await User.findById(decoded.userId);
+        if (!user) {
+            return res.status(400).json({ message: "User not found" });
+        }
+
+        // Invalidate old tokens using passwordChangedAt
+        if (
+            user.passwordChangedAt &&
+            decoded.iat * 1000 < user.passwordChangedAt.getTime()
+        ) {
+            return res.status(400).json({ message: "Token expired" });
+        }
+
+        const hashedPassword = await bcrypt.hash(newpass, 10);
+        user.password = hashedPassword;
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Password reset successfully. Please login again"
+        });
+
+    } catch (error) {
+        console.error("resetPass error:", error.message);
+        return res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
