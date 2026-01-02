@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs"
 import User from "../models/user.model.js";
-import { generateAccessToken, generateOTP, generateResetToken } from "../lib/utils.js";
+import { generateAccessToken, generateOTP } from "../lib/utils.js";
 import OTP from "../models/otp.model.js";
 import jwt from "jsonwebtoken";
 
@@ -55,7 +55,7 @@ export const signup = async (req,res) =>{
             await OTP.deleteMany({ identifier: email });
             await OTP.deleteMany({ identifier: phone });
 
-            const AccessToken = generateAccessToken(user._id,user.organizationId);
+            const AccessToken = generateAccessToken(newUser._id,newUser.organizationId);
 
             return res.status(201).json({
                 success: true,
@@ -260,77 +260,87 @@ export const verifyOTP = async (req, res) => {
 // forget and reset
 export const forgotPass = async (req, res) => {
     try {
-        const { email, orgid } = req.body;
+        const { orgid, email, phone } = req.body;
+        const identifier = phone || email;
 
-        const user = await User.findOne({ email, organizationId:orgid });
-        if (!user) {
-            // we will not reveal user existence
-            return res.status(200).json({
-                message: "If the email exists, a reset link has been sent",
+        if (!identifier || !orgid) {
+            return res.status(400).json({
+                message: "Email/Phone and orgid are required",
             });
         }
 
-        const resetToken = generateResetToken(user._id,orgid);
-
-        // const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-        const resetUrl = `<frontend domain, dev - localhost:PORT>/reset-password?token=${resetToken}`;
-
-        res.status(200).json({
-            message: "If the email exists, a reset link has been sent",
-            reseturl: resetUrl,
+        const user = await User.findOne({
+            $or: [{ email }, { phone }],
+            organizationId: orgid,
         });
 
-    } catch (error) {
-        console.log("Error in fprget password", error.message);
-        return res.status(500).json({ message: "Server Error" });
-    }
-}
-
-export const resetPass = async (req, res) => {
-    try {
-        const { token, newpass } = req.body;
-
-        if (!token || !newpass) {
-            return res.status(400).json({ message: "Invalid request" });
-        }
-
-        if (newpass.length < 6) {
-            return res.status(400).json({
-                message: "New password must be at least 6 characters."
+        // Do NOT reveal user existence
+        if (!user) {
+            return res.status(200).json({
+                message: "If the account exists, an OTP has been sent",
             });
         }
 
-        // console.log(process.env.RESET_TOKEN_SECRET);
-        // verifying token
-        const decoded = jwt.verify(token,process.env.RESET_TOKEN_SECRET);
+        const otp = generateOTP();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-        const user = await User.findById(decoded.userId);
-        if (!user) {
-            return res.status(400).json({ message: "User not found" });
-        }
+        // Remove old OTPs
+        await OTP.deleteMany({ identifier });
 
-        // Invalidate old tokens using passwordChangedAt
-        if (
-            user.passwordChangedAt &&
-            decoded.iat * 1000 < user.passwordChangedAt.getTime()
-        ) {
-            return res.status(400).json({ message: "Token expired" });
-        }
+        // Save new OTP
+        await OTP.create({
+            identifier,
+            otp,
+            expiresAt,
+            verified: false,
+        });
 
-        const hashedPassword = await bcrypt.hash(newpass, 10);
-        user.password = hashedPassword;
-        await user.save();
+        // TODO: send OTP via email/SMS here
 
         return res.status(200).json({
             success: true,
-            message: "Password reset successfully. Please login again"
+            message: "OTP sent for password reset",
+            otp, // ⚠️ remove in production
         });
 
     } catch (error) {
-        console.error("resetPass error:", error.message);
-        return res.status(500).json({
-            message: "Server error"
-        });
+        console.error("forgotPass error:", error.message);
+        return res.status(500).json({ message: "Server Error" });
     }
 };
 
+export const resetPass = async (req, res) => {
+    const { email, phone, otp, orgid, newpass } = req.body;
+    const identifier = phone || email;
+
+    if (!identifier || !otp || !orgid || !newpass) {
+        return res.status(400).json({
+            message: "Invalid request",
+        });
+    }
+
+    try {
+        const otpRecord = await OTP.findOne({ identifier });
+
+        if (!otpRecord)
+            return res.status(400).json({ message: "OTP not found or expired" });
+
+        if (otpRecord.otp !== otp)
+            return res.status(400).json({ message: "Invalid OTP" });
+
+        if (otpRecord.expiresAt < new Date())
+            return res.status(400).json({ message: "OTP expired" });
+
+        otpRecord.verified = true;
+        await otpRecord.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "OTP verified. You can reset password now",
+        });
+
+    } catch (error) {
+        console.error("verifyForgotOTP error:", error.message);
+        return res.status(500).json({ message: "Server Error" });
+    }
+};
