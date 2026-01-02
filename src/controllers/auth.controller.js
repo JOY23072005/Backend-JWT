@@ -179,6 +179,8 @@ export const requestOTP = async (req, res) => {
         return res.status(400).json({message:"User already exists. Please login"})
     }
 
+    const purpose = islogin ? "LOGIN" : "SIGNUP";
+
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 5 minutes
     
@@ -189,6 +191,7 @@ export const requestOTP = async (req, res) => {
     await OTP.create({
         identifier,
         otp,
+        purpose,
         expiresAt
     });
 
@@ -205,10 +208,15 @@ export const verifyOTP = async (req, res) => {
     const { orgid, phone, email, otp, islogin } = req.body;
 
     const identifier = phone || email;
+    const purpose = islogin ? "LOGIN" : "SIGNUP";
 
     try {
         // Find OTP record
-        const otpRecord = await OTP.findOne({ identifier });
+        const otpRecord = await OTP.findOne({
+            identifier,
+            purpose,
+            expiresAt: { $gt: new Date() }
+        });
 
         if (!otpRecord)
             return res.status(400).json({ message: "OTP not found or expired" });
@@ -285,12 +293,13 @@ export const forgotPass = async (req, res) => {
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
         // Remove old OTPs
-        await OTP.deleteMany({ identifier });
+        await OTP.deleteMany({ identifier, purpose: "RESET_PASSWORD" });
 
         // Save new OTP
         await OTP.create({
             identifier,
             otp,
+            purpose: "RESET_PASSWORD",
             expiresAt,
             verified: false,
         });
@@ -320,7 +329,10 @@ export const resetPass = async (req, res) => {
     }
 
     try {
-        const otpRecord = await OTP.findOne({ identifier });
+        const otpRecord = await OTP.findOne({
+            identifier,
+            purpose: "RESET_PASSWORD",
+        });
 
         if (!otpRecord)
             return res.status(400).json({ message: "OTP not found or expired" });
@@ -331,13 +343,22 @@ export const resetPass = async (req, res) => {
         if (otpRecord.expiresAt < new Date())
             return res.status(400).json({ message: "OTP expired" });
 
-        otpRecord.verified = true;
-        await otpRecord.save();
+        const user = await User.findOne({
+        $or: [{ email }, { phone }],
+        organizationId: orgid,
+    });
 
-        return res.status(200).json({
-            success: true,
-            message: "OTP verified. You can reset password now",
-        });
+    user.password = await bcrypt.hash(newpass, 10);
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    await OTP.deleteMany({ identifier, purpose: "RESET_PASSWORD" });
+
+    res.json({
+        success: true,
+        message: "Password reset successful"
+    });
+
 
     } catch (error) {
         console.error("verifyForgotOTP error:", error.message);
