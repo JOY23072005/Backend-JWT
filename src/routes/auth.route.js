@@ -10,7 +10,7 @@ AuthRoutes.post("/signup",signup);
 AuthRoutes.post("/login",login);
 
 // verifying mail
-AuthRoutes.post("/request-otp",Limiter,requestOtp);
+AuthRoutes.post("/request-otp",requestOtp);
 AuthRoutes.post("/verify-otp",verifyOtp);
 
 // changing password using old password
