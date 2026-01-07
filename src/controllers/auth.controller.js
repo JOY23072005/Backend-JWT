@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs"
 import User from "../models/user.model.js";
-import { generateAccessToken, generateOTP } from "../lib/utils.js";
+import { generateAccessToken, generateOTP, sendOtpEmail } from "../lib/utils.js";
 import OTP from "../models/otp.model.js";
 import jwt from "jsonwebtoken";
 
@@ -155,213 +155,146 @@ export const changePass = async (req, res) => {
     }
 };
 
-export const requestOTP = async (req, res) => {
-    const { orgid, phone, email,islogin } = req.body;
-
+export const requestOtp = async (req, res) => {
+    const { orgid, email, phone, purpose } = req.body;
     const identifier = phone || email;
-    if (!identifier) {
-        return res.status(400).json({ message: "Phone or Email is required" });
+
+    if (!identifier || !purpose) {
+        return res.status(400).json({ message: "Identifier and purpose are required" });
+    }
+
+    if (!["LOGIN", "SIGNUP", "RESET_PASSWORD"].includes(purpose)) {
+        return res.status(400).json({ message: "Invalid OTP purpose" });
     }
 
     const user = await User.exists({
-        $or: [
-            {email:email},
-            {phone:phone}
-        ],
-        organizationId: orgid
+        $or: [{ email }, { phone }],
+        organizationId: orgid,
     });
 
-    if(islogin && !user){
-        return res.status(400).json({message:"User does not exist in given organisation"})
+    // Purpose-based validation
+    if ((purpose === "LOGIN" || purpose === "RESET_PASSWORD") && !user) {
+        return res.status(400).json({ message: "User does not exist" });
     }
 
-    if(!islogin && user){
-        return res.status(400).json({message:"User already exists. Please login"})
+    if (purpose === "SIGNUP" && user) {
+        return res.status(400).json({ message: "User already exists. Please login" });
     }
-
-    const purpose = islogin ? "LOGIN" : "SIGNUP";
 
     const otp = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 5 minutes
-    
-    // Delete old OTP for same user
-    await OTP.deleteMany({ identifier });
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Save new OTP
+    // Remove old OTPs for same identifier + purpose
+    await OTP.deleteMany({ identifier, purpose });
+
     await OTP.create({
         identifier,
         otp,
         purpose,
-        expiresAt
+        expiresAt,
+        verified: false,
     });
+    // console.log(email,otp);
 
-    // TEMP: return OTP for now
-    res.json({
+    await sendOtpEmail({ to: email, otp: otp });
+
+    return res.json({
         success: true,
-        message: "OTP sent",
-        otp,
-        userExist:user?true:false
+        message: "OTP sent successfully",
     });
 };
 
-export const verifyOTP = async (req, res) => {
-    const { orgid, phone, email, otp, islogin } = req.body;
-
-    const identifier = phone || email;
-    const purpose = islogin ? "LOGIN" : "SIGNUP";
-
-    try {
-        // Find OTP record
-        const otpRecord = await OTP.findOne({
-            identifier,
-            purpose,
-            expiresAt: { $gt: new Date() }
-        });
-
-        if (!otpRecord)
-            return res.status(400).json({ message: "OTP not found or expired" });
-
-        if (otpRecord.otp !== otp)
-            return res.status(400).json({ message: "Invalid OTP" });
-
-        // Mark OTP as verified
-        otpRecord.verified = true;
-        await otpRecord.save();
-
-        // If it's NOT a login request -> just return success
-        if (!islogin) {
-            return res.status(200).json({
-                success: true,
-                message: "OTP verified successfully"
-            });
-        }
-
-        // Login Flow ------------------------------------------
-        const user = await User.findOne({
-            $or: [{ email: email }, { phone: phone }],
-            organizationId: orgid,
-        }).select("+password +organizationId");
-
-        if (!user) {
-            return res.status(400).json({ message: "Invalid credentials" });
-        }
-
-        // Remove password for response safety
-        user.password = undefined;
-
-        // Generate Access Token
-        const accessToken = generateAccessToken(user._id, user.organizationId);
-
-        return res.status(200).json({
-            success: true,
-            message: "OTP verified. Login successful",
-            token: accessToken,
-            userExist: user?true:false,
-        });
-
-    } catch (error) {
-        console.log("Error in verifyOTP:", error.message);
-        return res.status(500).json({ message: "Server Error" });
-    }
-};
-
-// forget and reset
-export const forgotPass = async (req, res) => {
-    try {
-        const { orgid, email, phone } = req.body;
-        const identifier = phone || email;
-
-        if (!identifier || !orgid) {
-            return res.status(400).json({
-                message: "Email/Phone and orgid are required",
-            });
-        }
-
-        const user = await User.findOne({
-            $or: [{ email }, { phone }],
-            organizationId: orgid,
-        });
-
-        // Do NOT reveal user existence
-        if (!user) {
-            return res.status(200).json({
-                message: "If the account exists, an OTP has been sent",
-            });
-        }
-
-        const otp = generateOTP();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-
-        // Remove old OTPs
-        await OTP.deleteMany({ identifier, purpose: "RESET_PASSWORD" });
-
-        // Save new OTP
-        await OTP.create({
-            identifier,
-            otp,
-            purpose: "RESET_PASSWORD",
-            expiresAt,
-            verified: false,
-        });
-
-        // TODO: send OTP via email/SMS here
-
-        return res.status(200).json({
-            success: true,
-            message: "OTP sent for password reset",
-            otp, // ⚠️ remove in production
-        });
-
-    } catch (error) {
-        console.error("forgotPass error:", error.message);
-        return res.status(500).json({ message: "Server Error" });
-    }
-};
-
-export const resetPass = async (req, res) => {
-    const { email, phone, otp, orgid, newpass } = req.body;
+export const verifyOtp = async (req, res) => {
+    const { orgid, email, phone, otp, purpose } = req.body;
     const identifier = phone || email;
 
-    if (!identifier || !otp || !orgid || !newpass) {
-        return res.status(400).json({
-            message: "Invalid request",
+    if (!identifier || !otp || !purpose) {
+        return res.status(400).json({ message: "Invalid request" });
+    }
+
+    if (!["LOGIN", "SIGNUP", "RESET_PASSWORD"].includes(purpose)) {
+        return res.status(400).json({ message: "Invalid OTP purpose" });
+    }
+
+    const otpRecord = await OTP.findOne({
+        identifier,
+        purpose,
+        expiresAt: { $gt: new Date() },
+    });
+
+    if (!otpRecord || otpRecord.otp !== otp) {
+        return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    otpRecord.verified = true;
+    await otpRecord.save();
+
+    // 🔹 SIGNUP / RESET → just verification
+    if (purpose === "SIGNUP" || purpose === "RESET_PASSWORD") {
+        return res.json({
+            success: true,
+            message: "OTP verified successfully",
         });
     }
 
-    try {
-        const otpRecord = await OTP.findOne({
-            identifier,
-            purpose: "RESET_PASSWORD",
-        });
-
-        if (!otpRecord)
-            return res.status(400).json({ message: "OTP not found or expired" });
-
-        if (otpRecord.otp !== otp)
-            return res.status(400).json({ message: "Invalid OTP" });
-
-        if (otpRecord.expiresAt < new Date())
-            return res.status(400).json({ message: "OTP expired" });
-
-        const user = await User.findOne({
+    // 🔹 LOGIN → issue token
+    const user = await User.findOne({
         $or: [{ email }, { phone }],
         organizationId: orgid,
     });
+
+    if (!user) {
+        return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    const token = generateAccessToken(user._id, user.organizationId);
+
+    return res.json({
+        success: true,
+        message: "Login successful",
+        token,
+    });
+};
+export const resetPass = async (req, res) => {
+    const { email, phone, orgid, newpass } = req.body;
+    const identifier = phone || email;
+
+    if (!identifier || !newpass || !orgid) {
+        return res.status(400).json({ message: "Invalid request" });
+    }
+
+    if (newpass.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const otpRecord = await OTP.findOne({
+        identifier,
+        purpose: "RESET_PASSWORD",
+        verified: true,
+    });
+
+    if (!otpRecord) {
+        return res.status(400).json({ message: "OTP verification required" });
+    }
+
+    const user = await User.findOne({
+        $or: [{ email }, { phone }],
+        organizationId: orgid,
+    });
+
+    if (!user) {
+        return res.status(400).json({ message: "User not found" });
+    }
 
     user.password = await bcrypt.hash(newpass, 10);
     user.passwordChangedAt = new Date();
     await user.save();
 
+    // Invalidate OTP after use
     await OTP.deleteMany({ identifier, purpose: "RESET_PASSWORD" });
 
-    res.json({
+    return res.json({
         success: true,
-        message: "Password reset successful"
+        message: "Password reset successful",
     });
-
-
-    } catch (error) {
-        console.error("verifyForgotOTP error:", error.message);
-        return res.status(500).json({ message: "Server Error" });
-    }
 };
