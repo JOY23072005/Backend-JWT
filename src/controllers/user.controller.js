@@ -1,8 +1,10 @@
+import { connectDB } from "../lib/db.js";
 import User from "../models/user.model.js";
 
 export const updateProfile = async (req,res) => {
     const {name,email,phone,dob,gender,orgid,empid,roll} = req.body;
     try{
+    await connectDB();
     let isEmailVerified = false;
     if(email){
         const emailOtp = await OTP.findOne({ identifier: email, verified: true });
@@ -53,6 +55,7 @@ export const updateProfile = async (req,res) => {
 export const getDetails = async (req,res)=>{
     const userId = req.userId;
     try{
+    await connectDB();
     const user = await User.findById(userId).select("-password -_id -__v");
     if(!user){
         return res.status(400).json({message:"User not found"});
