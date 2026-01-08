@@ -2,7 +2,8 @@ import bcrypt from "bcryptjs"
 import User from "../models/user.model.js";
 import { generateAccessToken, generateOTP, sendOtpEmail } from "../lib/utils.js";
 import OTP from "../models/otp.model.js";
-import jwt from "jsonwebtoken";
+import { connectDB } from "../lib/db.js"
+
 
 export const signup = async (req,res) =>{
     const {name,email,phone,dob,gender,orgid,empid,roll,password} = req.body;
@@ -19,6 +20,8 @@ export const signup = async (req,res) =>{
                 message: "Password must be at least 6 characters",
             });
         }
+
+        await connectDB();
 
         // CHECK OTP FOR EMAIL OR PHONE (IMPORTANT FIX)
         const emailOtp = await OTP.findOne({ identifier: email, verified: true });
@@ -79,6 +82,9 @@ export const login = async (req,res) =>{
     }
 
     try {
+
+        await connectDB();
+
         const user = await User.findOne({
             $or: [
                 {email:email},
@@ -126,6 +132,9 @@ export const changePass = async (req, res) => {
     }
 
     try {
+
+        await connectDB();
+
         const userId = req.userId;
         const user = await User.findById(userId).select("+password");
 
@@ -166,6 +175,8 @@ export const requestOtp = async (req, res) => {
     if (!["LOGIN", "SIGNUP", "RESET_PASSWORD"].includes(purpose)) {
         return res.status(400).json({ message: "Invalid OTP purpose" });
     }
+
+    await connectDB();
 
     const user = await User.exists({
         $or: [{ email }, { phone }],
@@ -215,6 +226,8 @@ export const verifyOtp = async (req, res) => {
     if (!["LOGIN", "SIGNUP", "RESET_PASSWORD"].includes(purpose)) {
         return res.status(400).json({ message: "Invalid OTP purpose" });
     }
+
+    await connectDB();
 
     const otpRecord = await OTP.findOne({
         identifier,
@@ -266,6 +279,8 @@ export const resetPass = async (req, res) => {
     if (newpass.length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
+
+    await connectDB();
 
     const otpRecord = await OTP.findOne({
         identifier,

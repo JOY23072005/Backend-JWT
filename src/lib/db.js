@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+mongoose.set("bufferCommands", false);
+
 const MONGO_URI = process.env.MONGODB_URI;
 
 if (!MONGO_URI) {
