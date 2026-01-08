@@ -43,8 +43,8 @@ const htmlTemplate=`<div style="font-family: system-ui, -apple-system, BlinkMacS
     >
       <img
         src="https://res.cloudinary.com/dgwx34lqc/image/upload/v1767824458/Untitled-3-removebg-preview_yxqs5c.png"
-        width="127"
-        height="122"
+        width="64"
+        height="61"
         alt="Rivods"
         style="display:block; margin:0 auto;"
       />
