@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 // Load env variables IMMEDIATELY before creating the transporter
 dotenv.config();
 
-console.log("Auth Object:", { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS });
+console.log("Auth Object:", { user: process.env.EMAIL_USER, pass: process.env.EMAIL_APP_PASS });
 
 export const generateAccessToken = (userId,orgId) => {
     return jwt.sign(

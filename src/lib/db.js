@@ -1,10 +1,27 @@
 import mongoose from "mongoose";
 
-export const connectDB = async () =>{
-    try {
-        const conn = await mongoose.connect(process.env.MONGODB_URI)
-        console.log(`MongoDB connection : ${conn.connection.host}`);
-    } catch (error){
-        console.log(`Error : ${error}`)
-    }
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  throw new Error("Please define MONGO_URI");
+}
+
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
+export async function connectDB() {
+  if (cached.conn) return cached.conn;
+
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(MONGO_URI, {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 5000,
+    }).then((mongoose) => mongoose);
+  }
+
+  cached.conn = await cached.promise;
+  return cached.conn;
 }
