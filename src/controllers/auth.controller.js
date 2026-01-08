@@ -6,7 +6,7 @@ import { connectDB } from "../lib/db.js"
 
 
 export const signup = async (req,res) =>{
-    const {name,email,phone,dob,gender,orgid,empid,roll,password} = req.body;
+    const {name,email,phone,dob,gender,orgid,empid,roll,password} = req.body || {} ;
     try {
         if(!name || !email || !dob || !gender){
             return res.status(400).json({
@@ -75,7 +75,7 @@ export const signup = async (req,res) =>{
 }
 
 export const login = async (req,res) =>{
-    const {orgid,email,phone,password} = req.body;
+    const {orgid,email,phone,password} = req.body || {} ;
 
     if (!password || (!email && !phone) || !orgid) {
         return res.status(400).json({ message: "Email/Phone and password & orgid are required." });
@@ -117,7 +117,7 @@ export const login = async (req,res) =>{
 }
 
 export const changePass = async (req, res) => {
-    const { oldpass, newpass } = req.body;
+    const { oldpass, newpass } = req.body || {} ;
 
     if (!oldpass || !newpass) {
         return res.status(400).json({
@@ -165,7 +165,7 @@ export const changePass = async (req, res) => {
 };
 
 export const requestOtp = async (req, res) => {
-    const { orgid, email, phone, purpose } = req.body;
+    const { orgid, email, phone, purpose } = req.body || {} ;
     const identifier = phone || email;
 
     if (!identifier || !purpose) {
@@ -216,7 +216,7 @@ export const requestOtp = async (req, res) => {
 };
 
 export const verifyOtp = async (req, res) => {
-    const { orgid, email, phone, otp, purpose } = req.body;
+    const { orgid, email, phone, otp, purpose } = req.body || {} ;
     const identifier = phone || email;
 
     if (!identifier || !otp || !purpose) {
@@ -269,7 +269,7 @@ export const verifyOtp = async (req, res) => {
     });
 };
 export const resetPass = async (req, res) => {
-    const { email, phone, orgid, newpass } = req.body;
+    const { email, phone, orgid, newpass } = req.body || {} ;
     const identifier = phone || email;
 
     if (!identifier || !newpass || !orgid) {

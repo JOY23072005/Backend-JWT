@@ -1,8 +1,10 @@
 import { connectDB } from "../lib/db.js";
 import User from "../models/user.model.js";
+import cloudinary from "../lib/cloudinary.js";
+import streamifier from "streamifier";
 
 export const updateProfile = async (req,res) => {
-    const {name,email,phone,dob,gender,orgid,empid,roll} = req.body;
+    const {name,email,phone,dob,gender,orgid,empid,roll} = req.body || {} ;
     try{
     await connectDB();
     let isEmailVerified = false;
@@ -68,3 +70,62 @@ export const getDetails = async (req,res)=>{
         })
     }
 }
+
+export const uploadProfileImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image provided" });
+    }
+
+    await connectDB();
+
+    const userId = req.userId;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Delete old image if exists
+    if (user.profileImage?.publicId) {
+      await cloudinary.uploader.destroy(user.profileImage.publicId);
+    }
+
+    // Upload new image using stream
+    const uploadFromBuffer = () =>
+      new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "rivods/profile-images",
+            resource_type: "image",
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+
+        streamifier.createReadStream(req.file.buffer).pipe(stream);
+      });
+
+    const result = await uploadFromBuffer();
+
+    // Save in DB
+    user.profileImage = {
+      url: result.secure_url,
+      publicId: result.public_id,
+    };
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Profile image updated successfully",
+      profileImage: user.profileImage.url,
+    });
+
+  } catch (error) {
+    console.error("uploadProfileImage error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
