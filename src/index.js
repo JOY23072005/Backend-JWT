@@ -28,7 +28,7 @@ app.use("/org",OrgRoutes);
 
 const PORT = process.env.PORT
 
-app.listen(PORT,()=>{
+app.listen(PORT,async ()=>{
     console.log(`server is running on port ${PORT}`)
-    connectDB();
+    await connectDB();
 })
