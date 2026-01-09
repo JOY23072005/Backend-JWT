@@ -18,8 +18,8 @@ app.use("/auth", AuthRoutes);
 app.use("/user", UserRoutes);
 app.use("/org", OrgRoutes);
 
-// app.listen('5001',()=>{
-//     console.log("server running");
-// })
+app.listen('5001',()=>{
+    console.log("server running");
+})
 
 export default app; // ✅ IMPORTANT

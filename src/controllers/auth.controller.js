@@ -1,9 +1,14 @@
 import bcrypt from "bcryptjs"
-import User from "../models/user.model.js";
-import { generateAccessToken, generateOTP, sendOtpEmail } from "../lib/utils.js";
-import OTP from "../models/otp.model.js";
-import { connectDB } from "../lib/db.js"
 
+import { generateAccessToken, generateRefreshToken, hashToken} from "../lib/utils/token.js";
+import { generateOTP, sendOtpEmail } from "../lib/utils/email.js";
+
+import { connectDB } from "../lib/db.js"
+import User from "../models/user.model.js";
+import OTP from "../models/otp.model.js";
+import RefreshToken from "../models/refreshToken.model.js"
+
+import jwt from "jsonwebtoken";
 
 export const signup = async (req,res) =>{
     const {name,email,phone,dob,gender,orgid,empid,roll,password} = req.body || {} ;
@@ -59,12 +64,23 @@ export const signup = async (req,res) =>{
             await OTP.deleteMany({ identifier: phone });
 
             const AccessToken = generateAccessToken(newUser._id,newUser.organizationId);
+            const Refresh_Token = generateRefreshToken(newUser._id,newUser.organizationId);
+            
+            await RefreshToken.create({
+                userId: newUser._id,
+                organizationId: newUser.organizationId,
+                tokenHash: hashToken(Refresh_Token),
+                expiresAt: new Date(
+                Date.now() + process.env.REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000
+                )
+            });
 
             return res.status(201).json({
                 success: true,
                 message: "Signup successful.",
                 userId: newUser._id,
                 token: AccessToken,
+                refreshToken: Refresh_Token 
             });
         }
     } catch (error) {
@@ -104,11 +120,24 @@ export const login = async (req,res) =>{
 
         user.password = undefined;
         const AccessToken = generateAccessToken(user._id,user.organizationId);
+        const Refresh_Token = generateRefreshToken(user._id,user.organizationId);
+            
+        await RefreshToken.deleteMany({ userId: user._id,organizationId: user.organizationId });
+
+        await RefreshToken.create({
+            userId: user._id,
+            organizationId: user.organizationId,
+            tokenHash: hashToken(Refresh_Token),
+            expiresAt: new Date(
+            Date.now() + process.env.REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000
+            )
+        });
         
         return res.status(200).json({
             success: true,
             message: "Login successful.",
             token:AccessToken,
+            refreshToken: Refresh_Token 
         })
     } catch(error){
         console.error("login error:",error.message);
@@ -251,6 +280,8 @@ export const verifyOtp = async (req, res) => {
     }
 
     // 🔹 LOGIN → issue token
+    await OTP.deleteOne({ _id: otpRecord._id });
+
     const user = await User.findOne({
         $or: [{ email }, { phone }],
         organizationId: orgid,
@@ -261,13 +292,29 @@ export const verifyOtp = async (req, res) => {
     }
 
     const token = generateAccessToken(user._id, user.organizationId);
+    const refresh_token = generateRefreshToken(user._id, user.organizationId);
+
+    await RefreshToken.deleteMany({ userId: user._id,organizationId: user.organizationId });
+    console.log("Deleting refresh tokens for user:", user._id);
+
+
+    await RefreshToken.create({
+        userId: user._id,
+        organizationId: user.organizationId,
+        tokenHash: hashToken(refresh_token),
+        expiresAt: new Date(
+        Date.now() + process.env.REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000
+        )
+    });
 
     return res.json({
         success: true,
         message: "Login successful",
         token,
+        refreshToken: refresh_token,
     });
 };
+
 export const resetPass = async (req, res) => {
     const { email, phone, orgid, newpass } = req.body || {} ;
     const identifier = phone || email;
@@ -313,3 +360,76 @@ export const resetPass = async (req, res) => {
         message: "Password reset successful",
     });
 };
+
+export const refresh = async (req, res) => {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.sendStatus(401);
+
+    let payload;
+    try {
+        payload = jwt.verify(
+        refreshToken,
+        process.env.REFRESH_TOKEN_SECRET
+        );
+    } catch(e) {
+        console.log(e.message);
+        return res.sendStatus(403);
+    }
+
+    await connectDB();
+
+    const tokenHash = hashToken(refreshToken);
+    const existing = await RefreshToken.findOneAndDelete({
+        tokenHash,
+        userId: payload.userId,
+        organizationId: payload.organizationId,
+        expiresAt: { $gt: new Date() }
+    });
+
+
+    if (!existing) {
+        console.log("error is here");
+        return res.sendStatus(403);
+    }
+
+    const newAccessToken = generateAccessToken(payload.userId,payload.organizationId);
+    const newRefreshToken = generateRefreshToken(payload.userId,payload.organizationId);
+
+    await RefreshToken.create({
+        userId: payload.userId,
+        organizationId: payload.organizationId,
+        tokenHash: hashToken(newRefreshToken),
+        expiresAt: new Date(
+        Date.now() +
+        process.env.REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000
+        )
+    });
+
+    res.json({
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+    });
+};
+
+export const logout = async (req, res) => {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.sendStatus(204);
+    
+    let payload;
+    try {
+        payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    } catch {
+        return res.sendStatus(403);
+    }
+
+    await connectDB();
+
+    await RefreshToken.deleteOne({
+        tokenHash: hashToken(refreshToken),
+        userId: payload.userId,
+        organizationId: payload.organizationId
+    });
+
+    res.status(200).json({message: "Logged out Successfully"});
+};
+

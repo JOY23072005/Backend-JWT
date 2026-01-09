@@ -1,21 +1,7 @@
-// auth/jwt.js
-import jwt from "jsonwebtoken";
-import rateLimit from "express-rate-limit";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 
-// Load env variables IMMEDIATELY before creating the transporter
 dotenv.config();
-
-console.log("Auth Object:", { user: process.env.EMAIL_USER, pass: process.env.EMAIL_APP_PASS });
-
-export const generateAccessToken = (userId,orgId) => {
-    return jwt.sign(
-        { userId: userId, organizationId: orgId }, 
-        process.env.ACCESS_TOKEN_SECRET, 
-        { expiresIn: "30d" }
-    );
-};
 
 export const generateOTP = () => {
     // generates a 6-digit OTP (100000 - 999999)
@@ -106,11 +92,3 @@ export const sendOtpEmail = async ({ to, otp }) => {
     throw error; // Rethrow to handle in your route controller
   }
 };
-
-export const Limiter = rateLimit({
-    windowMs: 5 * 60 * 1000, // 5 minutes
-    max: 5, // 5 requests
-    message: {
-        message: "Too many password reset requests. Try again later.",
-    },
-});
