@@ -1,7 +1,9 @@
+import { connectDB } from "../lib/db.js";
 import Organization from "../models/organisation.model.js"
 
 export const getAllOrg = async (req, res) => {
     try {
+        await connectDB();
         const organizations = await Organization.find({ isActive: true });
         let formatOrgs=[]
         organizations.map(o=>{
