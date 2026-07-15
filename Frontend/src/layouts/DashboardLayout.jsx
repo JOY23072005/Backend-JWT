@@ -101,7 +101,7 @@ export default function DashboardLayout() {
             <Menu size={20} />
           </button>
           <div className="min-w-0 flex-1">
-            <Navbar user={{name:user.name,email:user.email}} onLogout={logout} />
+            <Navbar/>
           </div>
         </div>
 

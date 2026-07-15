@@ -1,6 +1,7 @@
 import express from "express";
 
 import {protectRoute} from "../middleware/auth.middleware.js";
+import {authorize} from "../middleware/authorize.middleware.js";
 
 import {
   claimReward,
@@ -19,6 +20,7 @@ router.post(
 router.post(
   "/claim/:redemptionId",
   protectRoute,
+  authorize("admin","sub-admin","staff"),
   claimReward
 );
 

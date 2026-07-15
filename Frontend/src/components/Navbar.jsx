@@ -1,15 +1,33 @@
 import { useState, useRef, useEffect } from "react";
 import { Sun, Moon, ChevronDown, LogOut, User, Settings } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
-export default function Navbar({
-  user = { name: "Alex Rivera", email: "alex@example.com" },
-  onLogout = () => {},
-  onThemeChange = () => {},
-}) {
-  const [isDark, setIsDark] = useState(false);
+export default function Navbar() {
+  const { user, logout } = useAuth();
+  
+  // Initialize state directly from localStorage
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("theme") === "dark";
+    }
+    return false;
+  });
+  
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  // Synchronize HTML classes and localStorage whenever isDark changes
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDark]);
+
+  // Handle click outside for user dropdown menu
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -21,18 +39,18 @@ export default function Navbar({
   }, []);
 
   const toggleTheme = () => {
-    const next = !isDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    onThemeChange(next ? "dark" : "light");
+    setIsDark((prev) => !prev);
   };
 
-  const initials = user.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  // Safe check for initials in case user.name is missing
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "??";
 
   return (
     <header className="w-full border-b border-border bg-card">
@@ -62,11 +80,21 @@ export default function Navbar({
               aria-haspopup="true"
               className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5 hover:bg-background transition-colors"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                {initials}
-              </span>
+              {/* Avatar Logic: Profile Image first, then Initials */}
+              {user?.profileImage?.url ? (
+                <img
+                  src={user.profileImage.url}
+                  alt={user.name || "User profile"}
+                  className="h-7 w-7 rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
+                  {initials}
+                </span>
+              )}
+              
               <span className="hidden sm:block text-sm text-foreground max-w-[120px] truncate">
-                {user.name}
+                {user?.name}
               </span>
               <ChevronDown
                 size={16}
@@ -80,10 +108,10 @@ export default function Navbar({
               <div className="absolute right-0 mt-2 w-56 rounded-md border border-border bg-card shadow-lg overflow-hidden z-50">
                 <div className="px-3 py-3 border-b border-border">
                   <p className="text-sm font-medium text-foreground truncate">
-                    {user.name}
+                    {user?.name}
                   </p>
                   <p className="text-xs text-foreground/60 truncate">
-                    {user.email}
+                    {user?.email}
                   </p>
                 </div>
 
@@ -109,7 +137,7 @@ export default function Navbar({
                     type="button"
                     onClick={() => {
                       setIsDropdownOpen(false);
-                      onLogout();
+                      logout();
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-background transition-colors"
                   >
