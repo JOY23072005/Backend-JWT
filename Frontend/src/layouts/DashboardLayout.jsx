@@ -20,7 +20,7 @@ import { useAuth } from "../context/AuthContext";
 export default function DashboardLayout() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const location = useLocation();
-  const { user } = useAuth();
+  const { user,logout } = useAuth();
   const role = user.role;
   // Close the mobile drawer whenever the route changes.
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function DashboardLayout() {
             <Menu size={20} />
           </button>
           <div className="min-w-0 flex-1">
-            <Navbar user={{name:user.name,email:user.email}} />
+            <Navbar user={{name:user.name,email:user.email}} onLogout={logout} />
           </div>
         </div>
 

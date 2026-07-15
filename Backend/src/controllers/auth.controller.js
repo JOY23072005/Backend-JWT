@@ -176,11 +176,23 @@ export const login = async (req,res) =>{
             )
         });
         
+        const userResponse = {
+            id: user._id,
+            organizationId: user.organizationId,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            roll: user.roll,
+            employeeId: user.employeeId,
+            profileImage: user.profileImage,
+        };
+
         return res.status(200).json({
             success: true,
             message: "Login successful.",
             token:AccessToken,
-            user:user,
+            user:userResponse,
             refreshToken: Refresh_Token 
         })
     } catch(error){
@@ -374,11 +386,24 @@ export const verifyOtp = async (req, res) => {
         )
     });
 
+    const userResponse = {
+        id: user._id,
+        organizationId: user.organizationId,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        roll: user.roll,
+        employeeId: user.employeeId,
+        profileImage: user.profileImage,
+    };
+
     return res.json({
         success: true,
         message: "Login successful",
         token,
         refreshToken: refresh_token,
+        user: userResponse,
     });
 };
 

@@ -1,4 +1,4 @@
-import axiosInstance from "./api.js";
+import axiosInstance from "./axios.js";
 
 /**
  * POST /auth/login
