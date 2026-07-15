@@ -188,6 +188,10 @@ export const getAllOrg = async (req, res) => {
         category: org.category,
         isActive: org.isActive,
       }));
+      const totalPages = Math.ceil(
+          totalOrganizations /
+            limit
+        )
 
     return res.status(200).json({
       success: true,
@@ -200,10 +204,7 @@ export const getAllOrg = async (req, res) => {
         limit,
         totalItems:
           totalOrganizations,
-        totalPages: Math.ceil(
-          totalOrganizations /
-            limit
-        ),
+        totalPages,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
       },
