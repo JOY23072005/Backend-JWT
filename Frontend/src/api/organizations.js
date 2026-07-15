@@ -28,7 +28,7 @@ export const createOrganization = async (
   organization
 ) => {
   const { data } = await axiosInstance.post(
-    "/org",
+    "/org/create",
     organization
   );
 

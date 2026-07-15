@@ -12,7 +12,13 @@ import {
   ChevronRight,
   X,
 } from "lucide-react";
-import { getOrganizations, toggleOrganizationStatus } from "../api/organizations.js";
+import {
+  getOrganizations,
+  getOrganization,
+  toggleOrganizationStatus,
+} from "../api/organizations.js";
+import OrganizationModal from "../components/organizations/OrganizationModal.jsx";
+import OrganizationDetailsDrawer from "../components/organizations/OrganizationDetailsDrawer.jsx";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -39,7 +45,7 @@ const ToggleSwitch = ({ isActive, isBusy, onToggle }) => (
   </button>
 );
 
-const ActionsMenu = ({ org, openId, setOpenId }) => {
+const ActionsMenu = ({ org, openId, setOpenId, onView, onEdit }) => {
   const isOpen = openId === org.orgid;
 
   return (
@@ -57,12 +63,20 @@ const ActionsMenu = ({ org, openId, setOpenId }) => {
           <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-border bg-card shadow-md">
             <button
               type="button"
+              onClick={() => {
+                setOpenId(null);
+                onView(org);
+              }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-foreground/5"
             >
               <Eye size={15} /> View
             </button>
             <button
               type="button"
+              onClick={() => {
+                setOpenId(null);
+                onEdit(org);
+              }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-foreground/5"
             >
               <Pencil size={15} /> Edit
@@ -113,6 +127,13 @@ export default function Organizations() {
   const [toast, setToast] = useState(null);
   const debounceRef = useRef(null);
   const toastTimeoutRef = useRef(null);
+
+  // Minimal additional state for modal/drawer integration
+  const [selectedOrganization, setSelectedOrganization] = useState(null);
+  const [modalMode, setModalMode] = useState("create");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loadingOrganization, setLoadingOrganization] = useState(false);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -179,6 +200,49 @@ export default function Organizations() {
     }
   };
 
+  const handleView = async (org) => {
+    setDrawerOpen(true);
+    setSelectedOrganization(null);
+    setLoadingOrganization(true);
+    try {
+      const data = await getOrganization(org.orgid);
+      setSelectedOrganization(data?.organization ?? data ?? org);
+    } catch (err) {
+      showToast(
+        err?.response?.data?.message || `Failed to load details for ${org.name}. Please try again.`
+      );
+      setDrawerOpen(false);
+    } finally {
+      setLoadingOrganization(false);
+    }
+  };
+
+  const handleEdit = async (org) => {
+    setLoadingOrganization(true);
+    try {
+      const data = await getOrganization(org.orgid);
+      setSelectedOrganization(data?.organization ?? data ?? org);
+      setModalMode("edit");
+      setModalOpen(true);
+    } catch (err) {
+      showToast(
+        err?.response?.data?.message || `Failed to load organization for editing. Please try again.`
+      );
+    } finally {
+      setLoadingOrganization(false);
+    }
+  };
+
+  const handleCreateClick = () => {
+    setSelectedOrganization(null);
+    setModalMode("create");
+    setModalOpen(true);
+  };
+
+  const handleModalSuccess = () => {
+    fetchOrganizations();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -188,6 +252,7 @@ export default function Organizations() {
         </div>
         <button
           type="button"
+          onClick={handleCreateClick}
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
         >
           <Plus size={16} /> Create Organization
@@ -300,7 +365,13 @@ export default function Organizations() {
                         />
                       </td>
                       <td className="p-4">
-                        <ActionsMenu org={org} openId={openMenuId} setOpenId={setOpenMenuId} />
+                        <ActionsMenu
+                          org={org}
+                          openId={openMenuId}
+                          setOpenId={setOpenMenuId}
+                          onView={handleView}
+                          onEdit={handleEdit}
+                        />
                       </td>
                     </tr>
                   ))
@@ -338,6 +409,21 @@ export default function Organizations() {
       )}
 
       {toast && <ErrorToast message={toast} onClose={() => setToast(null)} />}
+
+      <OrganizationModal
+        mode={modalMode}
+        organization={selectedOrganization}
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSuccess={handleModalSuccess}
+      />
+
+      <OrganizationDetailsDrawer
+        organization={selectedOrganization}
+        open={drawerOpen}
+        loading={loadingOrganization}
+        onClose={() => setDrawerOpen(false)}
+      />
     </div>
   );
 }
