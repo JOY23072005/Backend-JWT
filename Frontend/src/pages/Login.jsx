@@ -90,7 +90,7 @@ function OrganizationCombobox({
             </p>
           ) : (
             filteredOrgs.map((org) => (
-              <button
+              org.isActive && <button
                 type="button"
                 key={org.orgid}
                 onClick={() => {
