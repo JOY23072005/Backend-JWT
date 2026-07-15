@@ -1,29 +1,17 @@
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 
 import DashboardLayout from "./layouts/DashboardLayout";
-import Login from "./pages/Login";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
-function DashboardHome() {
-  return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      Dashboard Working 🚀
-    </div>
-  );
-}
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard/Dashboard";
 
 const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <Navigate to="/login" replace />,
-  },
-
   {
     path: "/login",
     element: <Login />,
   },
 
-  // Super Admin + Sub Admin
   {
     element: (
       <ProtectedRoute allowedRoles={["admin", "sub-admin"]}>
@@ -33,7 +21,7 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/dashboard",
-        element: <DashboardHome />,
+        element: <Dashboard />,
       },
 
       {
@@ -63,7 +51,6 @@ const router = createBrowserRouter([
     ],
   },
 
-  // Staff
   {
     element: (
       <ProtectedRoute allowedRoles={["staff"]}>
@@ -73,14 +60,19 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/staff/redemptions",
-        element: <DashboardHome />,
+        element: <div>Staff Redemptions</div>,
       },
     ],
   },
 
   {
+    path: "/",
+    element: <Navigate to="/dashboard" replace />,
+  },
+
+  {
     path: "*",
-    element: <Navigate to="/login" replace />,
+    element: <Navigate to="/dashboard" replace />,
   },
 ]);
 
