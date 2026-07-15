@@ -130,22 +130,83 @@ export const getAllOrg = async (req, res) => {
   try {
     await connectDB();
 
-    const organizations =
-      await Organization.find({
-        isActive: true,
-      });
+    const page = Math.max(
+      parseInt(req.query.page) || 1,
+      1
+    );
 
-    const formatOrgs =
+    const limit = Math.max(
+      parseInt(req.query.limit) || 10,
+      1
+    );
+
+    const search =
+      req.query.search?.trim() || "";
+
+    const isActive =
+      req.query.isActive;
+
+    const query = {};
+
+    // Search by organization name
+    if (search) {
+      query.name = {
+        $regex: search,
+        $options: "i",
+      };
+    }
+
+    // Optional active filter
+    if (
+      isActive === "true" ||
+      isActive === "false"
+    ) {
+      query.isActive =
+        isActive === "true";
+    }
+
+    const totalOrganizations =
+      await Organization.countDocuments(
+        query
+      );
+
+    const organizations =
+      await Organization.find(query)
+        .sort({
+          createdAt: -1,
+        })
+        .skip((page - 1) * limit)
+        .limit(limit);
+
+    const formattedOrganizations =
       organizations.map((org) => ({
         orgid: org._id,
         name: org.name,
-        image_url: org.logo?.url || null,
+        code: org.code,
+        image_url:
+          org.logo?.url || null,
         category: org.category,
+        isActive: org.isActive,
       }));
 
     return res.status(200).json({
       success: true,
-      organizations: formatOrgs,
+
+      organizations:
+        formattedOrganizations,
+
+      pagination: {
+        page,
+        limit,
+        totalItems:
+          totalOrganizations,
+        totalPages: Math.ceil(
+          totalOrganizations /
+            limit
+        ),
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
     });
 
   } catch (error) {
