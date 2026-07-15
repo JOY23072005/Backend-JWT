@@ -369,6 +369,11 @@ export const verifyOtp = async (req, res) => {
     if (!user) {
         return res.status(400).json({ message: "Invalid credentials" });
     }
+    if (!user.isActive) {
+        return res.status(403).json({
+            message: "Account disabled",
+        });
+    }
 
     const token = generateAccessToken(user._id, user.organizationId);
     const refresh_token = generateRefreshToken(user._id, user.organizationId);
