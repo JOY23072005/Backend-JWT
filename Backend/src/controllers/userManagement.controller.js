@@ -176,30 +176,114 @@ export const getUsers = async (
 
     await connectDB();
 
+    const page = Math.max(
+      parseInt(req.query.page) || 1,
+      1
+    );
+
+    const limit = Math.max(
+      parseInt(req.query.limit) || 10,
+      1
+    );
+
+    const search =
+      req.query.search?.trim() || "";
+
+    const role =
+      req.query.role?.trim();
+
+    const isActive =
+      req.query.isActive;
+
+    const query = {
+      organizationId:
+        req.user.organizationId,
+    };
+
+    if (search) {
+      query.$or = [
+        {
+          name: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          email: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          employeeId: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+      ];
+    }
+
+    if (role) {
+      query.role = role;
+    }
+
+    if (
+      isActive === "true" ||
+      isActive === "false"
+    ) {
+      query.isActive =
+        isActive === "true";
+    }
+
+    const totalUsers =
+      await User.countDocuments(
+        query
+      );
+
     const users =
-      await User.find({
-        organizationId:
-          req.user
-            .organizationId,
-      })
-        .select(
-          "-password"
-        )
+      await User.find(query)
+        .select("-password")
         .sort({
           createdAt: -1,
-        });
+        })
+        .skip((page - 1) * limit)
+        .limit(limit);
+
+    const totalPages =
+      Math.ceil(
+        totalUsers / limit
+      );
 
     return res.status(200).json({
       success: true,
+
       users,
+
+      pagination: {
+        page,
+        limit,
+        totalItems:
+          totalUsers,
+        totalPages,
+        hasNextPage:
+          page < totalPages,
+        hasPrevPage:
+          page > 1,
+      },
     });
 
   } catch (error) {
+
+    console.log(
+      "getUsersOfOrganization:",
+      error.message
+    );
 
     return res.status(500).json({
       message:
         "Internal server error",
     });
+
   }
 };
 
@@ -211,32 +295,111 @@ export const getAllUsers = async (
 
     await connectDB();
 
+    const page = Math.max(
+      parseInt(req.query.page) || 1,
+      1
+    );
+
+    const limit = Math.max(
+      parseInt(req.query.limit) || 10,
+      1
+    );
+
+    const search =
+      req.query.search?.trim() || "";
+
+    const role =
+      req.query.role?.trim();
+
+    const isActive =
+      req.query.isActive;
+
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        {
+          name: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          email: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          employeeId: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+      ];
+    }
+
+    if (role) {
+      query.role = role;
+    }
+
+    if (
+      isActive === "true" ||
+      isActive === "false"
+    ) {
+      query.isActive =
+        isActive === "true";
+    }
+
+    const totalUsers =
+      await User.countDocuments(
+        query
+      );
+
     const users =
-      await User.find()
-        .populate(
-          "organizationId",
-          "name code"
-        )
-        .select(
-          "-password"
-        )
+      await User.find(query)
+        .select("-password")
         .sort({
           createdAt: -1,
-        });
+        })
+        .skip((page - 1) * limit)
+        .limit(limit);
+
+    const totalPages =
+      Math.ceil(
+        totalUsers / limit
+      );
 
     return res.status(200).json({
       success: true,
-      count:
-        users.length,
+
       users,
+
+      pagination: {
+        page,
+        limit,
+        totalItems:
+          totalUsers,
+        totalPages,
+        hasNextPage:
+          page < totalPages,
+        hasPrevPage:
+          page > 1,
+      },
     });
 
   } catch (error) {
+
+    console.log(
+      "getUsersOfOrganization:",
+      error.message
+    );
 
     return res.status(500).json({
       message:
         "Internal server error",
     });
+
   }
 };
 
