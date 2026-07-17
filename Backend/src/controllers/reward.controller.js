@@ -446,6 +446,8 @@ export const getManageRewards = async (req, res) => {
           reward.image?.url || null,
         isActive:
           reward.isActive,
+        createdAt:
+          reward.createdAt,
       }));
 
     const totalPages = Math.ceil(
