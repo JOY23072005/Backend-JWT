@@ -1,69 +1,45 @@
 import { useEffect, useState } from "react";
-import { X, AlertTriangle } from "lucide-react";
-import UserForm from "./UserForm";
-import { createUser, updateUserRole, updateUser, updateUserProfileImage } from "../../api/users";
+import { X, AlertTriangle, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import RewardForm from "./RewardForm.jsx";
+import { createReward, updateReward, updateRewardImage } from "../../api/rewards";
 
-export default function UserModal({ mode, user, allowedRoles, canEditRole, open, onClose, onSuccess }) {
+export default function RewardModal({ mode, reward, open, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const isEdit = mode === "edit";
-  const isCreate = mode === "create";
 
   useEffect(() => {
     if (open) {
       setError(null);
       setLoading(false);
     }
-  }, [open, user]);
+  }, [open, reward]);
 
   if (!open) return null;
 
   const handleSubmit = async (values) => {
     setLoading(true);
     setError(null);
-    let userId;
     try {
-      if (isCreate) {
-          const res = await createUser(values);
-          userId = res?.user._id;
-      }
-      else {
-          await updateUser(user._id, {
-            name: values.name,
-            phone: values.phone,
-            gender: values.gender,
-            dob: values.dob,
-            employeeId: values.employeeId,
-          });
+      const payload = { title: values.title, coinCost: values.coinCost };
+      let response = isEdit
+        ? await updateReward(reward.rewardId, payload)
+        : await createReward(payload);
 
-          if (
-            values.role !== user.role &&
-            canEditRole
-          ) {
-            await updateUserRole(
-              user._id,
-              values.role
-            );
-          }
-          userId = user._id;
-      }
-      console.log(values);
-      
       if (values.image) {
-        await updateUserProfileImage(
-          userId,
-          values.image
-        );
+        const rewardId = isEdit ? reward.rewardId : response?.data?._id || response?._id;
+        response = await updateRewardImage(rewardId, values.image);
       }
 
-      toast.success("User updated");
+      toast.success(isEdit ? "Reward updated successfully" : "Reward created successfully");
       onSuccess?.(response);
+      onClose?.();
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          `Failed to ${isEdit ? "update role" : "create user"}. Please try again.`
+          `Failed to ${isEdit ? "update" : "create"} reward. Please try again.`
       );
     } finally {
       setLoading(false);
@@ -84,7 +60,7 @@ export default function UserModal({ mode, user, allowedRoles, canEditRole, open,
       <div className="w-full max-w-lg rounded-lg border border-border bg-card shadow-lg">
         <div className="flex items-center justify-between border-b border-border p-5">
           <h2 className="text-lg font-semibold text-foreground">
-            {isEdit ? "Edit User" : "Create User"}
+            {isEdit ? "Edit Reward" : "Add Reward"}
           </h2>
           <button
             type="button"
@@ -104,14 +80,14 @@ export default function UserModal({ mode, user, allowedRoles, canEditRole, open,
             </div>
           )}
 
-          <UserForm
-            initialValues={isEdit ? user : null}
-            loading={loading}
-            mode={mode}
-            allowedRoles={allowedRoles}
-            onSubmit={handleSubmit}
-            canEditRole={canEditRole}
-          />
+          {loading && !error && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-foreground/60">
+              <Loader2 size={14} className="animate-spin" />
+              {isEdit ? "Saving changes..." : "Creating reward..."}
+            </div>
+          )}
+
+          <RewardForm initialValues={isEdit ? reward : null} loading={loading} onSubmit={handleSubmit} />
         </div>
       </div>
     </div>

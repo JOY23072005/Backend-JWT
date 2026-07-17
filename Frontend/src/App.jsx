@@ -7,6 +7,7 @@ import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import Organizations from "./pages/Organizations.jsx";
 import Users from "./pages/Users.jsx";
+import Rewards from "./pages/Rewards.jsx";
 
 const router = createBrowserRouter([
   // 1. Redirect root "/" directly to "/dashboard"
@@ -55,7 +56,7 @@ const router = createBrowserRouter([
         path: "/rewards",
         element: (
           <ProtectedRoute allowedRoles={["admin", "sub-admin"]}>
-            <span>Rewards</span>
+            <Rewards/>
           </ProtectedRoute>
         ),
       },
