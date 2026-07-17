@@ -25,13 +25,18 @@ export const createUser = async (
       employeeId,
     } = req.body;
 
+    const query = {
+      organizationId: req.user.organizationId,
+    };
+
+    if (email) {
+      query.email = email;
+    } else {
+      query.phone = phone;
+    }
+
     const existingUser =
-      await User.findOne({
-        organizationId:
-          req.user
-            .organizationId,
-        $or: [{ email }, { phone }]
-      });
+      await User.findOne(query);
 
     if (existingUser) {
       return res.status(400).json({

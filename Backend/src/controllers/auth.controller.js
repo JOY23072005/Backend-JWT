@@ -38,7 +38,17 @@ export const signup = async (req,res) =>{
             });
         }
 
-        const user = await User.exists({email,organizationId: orgid})
+        const query = {
+            organizationId: orgid,
+        };
+
+        if (email) {
+            query.email = email;
+        } else {
+            query.phone = phone;
+        }
+
+        const user = await User.exists(query)
 
         if(user) return res.status(400).json({message:"Email already exists"});
 
@@ -138,13 +148,18 @@ export const login = async (req,res) =>{
 
         await connectDB();
 
-        const user = await User.findOne({
-            $or: [
-                {email:email},
-                {phone:phone}
-            ],
-            organizationId: orgid
-        }).select('+password +organizationId');
+        const query = {
+            organizationId: orgid,
+        };
+
+        if (email) {
+            query.email = email;
+        } else {
+            query.phone = phone;
+        }
+
+        const user = await User.findOne(query)
+        .select("+password +organizationId");
 
         if(!user) {
             return res.status(400).json({message:"Invalid credentials"});
@@ -279,10 +294,17 @@ export const requestOtp = async (req, res) => {
 
     // console.log(org);
 
-    const user = await User.findOne({
-        $or: [{ email }, { phone }],
+    const query = {
         organizationId: orgid,
-    });
+    };
+
+    if (email) {
+        query.email = email;
+    } else {
+        query.phone = phone;
+    }
+
+    const user = await User.findOne(query);
     // console.log(user + user.isActive);
 
     if (user && !user.isActive) {
@@ -361,10 +383,17 @@ export const verifyOtp = async (req, res) => {
     // 🔹 LOGIN → issue token
     await OTP.deleteOne({ _id: otpRecord._id });
 
-    const user = await User.findOne({
-        $or: [{ email }, { phone }],
+    const query = {
         organizationId: orgid,
-    });
+    };
+
+    if (email) {
+        query.email = email;
+    } else {
+        query.phone = phone;
+    }
+
+    const user = await User.findOne(query);
 
     if (!user) {
         return res.status(400).json({ message: "Invalid credentials" });
@@ -436,10 +465,17 @@ export const resetPass = async (req, res) => {
         return res.status(400).json({ message: "OTP verification required" });
     }
 
-    const user = await User.findOne({
-        $or: [{ email }, { phone }],
+    const query = {
         organizationId: orgid,
-    });
+    };
+
+    if (email) {
+        query.email = email;
+    } else {
+        query.phone = phone;
+    }
+
+    const user = await User.findOne(query);
 
     if (!user) {
         return res.status(400).json({ message: "User not found" });
