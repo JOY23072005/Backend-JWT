@@ -30,7 +30,7 @@ export const createUser = async (
         organizationId:
           req.user
             .organizationId,
-        email,
+        $or: [{ email }, { phone }]
       });
 
     if (existingUser) {
