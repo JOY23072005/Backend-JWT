@@ -105,3 +105,8 @@ export const updateUser = async (
  */
 export const updateUserProfileImage = (userId, image) =>
   uploadImage(`/manage-users/${userId}/image`, image);
+
+export const deleteUser = async (userId) => {
+  const res = await axiosInstance.delete(`/manage-users/${userId}`);
+  return res;
+}

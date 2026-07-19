@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { useEffect, useRef, useState } from "react";
 import {
   Loader2,
@@ -6,6 +6,8 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import OrganizationCombobox from "../OrganizationCombobox";
+import axiosInstance from "../../api/axios";
 
 const ROLE_LABELS = {
   admin: "Platform Admin",
@@ -28,13 +30,31 @@ export default function UserForm({ initialValues, loading, mode = "create", allo
   const [imagePreview, setImagePreview] = useState(
     initialValues?.profileImage.url || null
   );
-  
+  const [organizations, setOrganizations] = useState([]);
+  const [isLoadingOrgs, setIsLoadingOrgs] = useState(true);
+
+  useEffect(() => {
+    const fetchOrganizations = async () => {
+      try {
+        const { data } = await axiosInstance.get("/org");
+        setOrganizations(data.organizations || []);
+      } finally {
+        setIsLoadingOrgs(false);
+      }
+    };
+
+    if (isCreate && canEditRole) {
+      fetchOrganizations();
+    }
+  }, [isCreate, canEditRole]);
+
   const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    formState: { errors },
+  register,
+  control,
+  handleSubmit,
+  reset,
+  watch,
+  formState: { errors },
   } = useForm({
     defaultValues: {
       name: initialValues?.name || "",
@@ -45,6 +65,7 @@ export default function UserForm({ initialValues, loading, mode = "create", allo
       dob: initialValues?.dob || "",
       employeeId: initialValues?.employeeId || "",
       role: initialValues?.role || allowedRoles[0] || "",
+      orgId: initialValues?.orgId || ""
     },
   });
 
@@ -66,6 +87,7 @@ export default function UserForm({ initialValues, loading, mode = "create", allo
       dob: initialValues?.dob?.split("T")[0] || "",
       employeeId: initialValues?.employeeId || "",
       role: initialValues?.role || allowedRoles[0] || "",
+      orgId: initialValues?.orgId || "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialValues]);
@@ -81,6 +103,7 @@ export default function UserForm({ initialValues, loading, mode = "create", allo
       email: values.email.trim(),
       password: values.password,
       image: values.image?.[0] || null,
+      orgId: values.orgId || "",
     });
   };
 
@@ -188,6 +211,35 @@ export default function UserForm({ initialValues, loading, mode = "create", allo
         {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
       </div>
 
+      {isCreate && canEditRole && (
+        <div>
+          <label
+            htmlFor="orgId"
+            className="mb-1 block text-sm font-medium text-foreground"
+          >
+            Organization
+          </label>
+
+          <Controller
+            name="orgId"
+            control={control}
+            rules={{
+              required: "Please select an organization.",
+            }}
+            render={({ field }) => (
+              <OrganizationCombobox
+                id="orgId"
+                organizations={organizations}
+                isLoading={isLoadingOrgs}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.orgId?.message}
+              />
+            )}
+          />
+        </div>
+      )}
       <div>
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-foreground">
           Email

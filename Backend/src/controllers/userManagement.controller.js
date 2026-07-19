@@ -23,10 +23,13 @@ export const createUser = async (
       dob,
       role,
       employeeId,
+      orgId
     } = req.body;
 
+    const organizationId = req.user.role === "admin" ? orgId || req.user.organizationId : req.user.organizationId;
+
     const query = {
-      organizationId: req.user.organizationId,
+      organizationId: organizationId,
     };
 
     if (email) {
@@ -54,8 +57,7 @@ export const createUser = async (
     const user =
       await User.create({
         organizationId:
-          req.user
-            .organizationId,
+          organizationId,
 
         name,
         email,
@@ -246,14 +248,26 @@ export const getUsers = async (
         query
       );
 
-    const users =
-      await User.find(query)
-        .select("-password")
-        .sort({
-          createdAt: -1,
-        })
-        .skip((page - 1) * limit)
-        .limit(limit);
+    const users = await User.find(query)
+      .select("-password")
+      .populate({
+        path: "organizationId",
+        select: "name",
+      })
+      .sort({
+        createdAt: -1,
+      })
+      .skip((page - 1) * limit)
+      .limit(limit);
+    
+    const formattedUsers = users.map((user) => {
+      const obj = user.toObject();
+
+      obj.organization = obj.organizationId?.name || null;
+      delete obj.organizationId;
+
+      return obj;
+    });
 
     const totalPages =
       Math.ceil(
@@ -262,19 +276,14 @@ export const getUsers = async (
 
     return res.status(200).json({
       success: true,
-
-      users,
-
+      users: formattedUsers,
       pagination: {
         page,
         limit,
-        totalItems:
-          totalUsers,
+        totalItems: totalUsers,
         totalPages,
-        hasNextPage:
-          page < totalPages,
-        hasPrevPage:
-          page > 1,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
       },
     });
 
@@ -362,14 +371,26 @@ export const getAllUsers = async (
         query
       );
 
-    const users =
-      await User.find(query)
-        .select("-password")
-        .sort({
-          createdAt: -1,
-        })
-        .skip((page - 1) * limit)
-        .limit(limit);
+    const users = await User.find(query)
+      .select("-password")
+      .populate({
+        path: "organizationId",
+        select: "name",
+      })
+      .sort({
+        createdAt: -1,
+      })
+      .skip((page - 1) * limit)
+      .limit(limit);
+    
+    const formattedUsers = users.map((user) => {
+      const obj = user.toObject();
+
+      obj.organization = obj.organizationId?.name || null;
+      delete obj.organizationId;
+
+      return obj;
+    });
 
     const totalPages =
       Math.ceil(
@@ -379,7 +400,7 @@ export const getAllUsers = async (
     return res.status(200).json({
       success: true,
 
-      users,
+      users : formattedUsers,
 
       pagination: {
         page,
@@ -621,5 +642,79 @@ export const updateUserProfileImage = async (
       message: "Server Error",
     });
 
+  }
+};
+
+export const deleteUser = async (req, res) => {
+  try {
+    await connectDB();
+
+    const { userId } = req.params;
+
+    const currentUser = req.user;
+
+    const userToDelete = await User.findById(userId);
+
+    if (!userToDelete) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    // Platform Admin -> can delete anyone
+    if (currentUser.role === "admin") {
+      await User.findByIdAndDelete(userId);
+
+      return res.status(200).json({
+        success: true,
+        message: "User deleted successfully",
+      });
+    }
+
+    // Organization Admin -> only users of same organization
+    if (currentUser.role === "sub-admin") {
+      if (
+        userToDelete.organizationId.toString() !==
+        currentUser.organizationId.toString()
+      ) {
+        return res.status(403).json({
+          message: "You cannot delete users from another organization.",
+        });
+      }
+
+      await User.findByIdAndDelete(userId);
+
+      return res.status(200).json({
+        success: true,
+        message: "User deleted successfully",
+      });
+    }
+
+    // Normal User -> only themselves
+    if (currentUser.role === "user") {
+      if (currentUser.userId.toString() !== userId) {
+        return res.status(403).json({
+          message: "You can only delete your own account.",
+        });
+      }
+
+      await User.findByIdAndDelete(userId);
+
+      return res.status(200).json({
+        success: true,
+        message: "Account deleted successfully",
+      });
+    }
+
+    return res.status(403).json({
+      message: "Unauthorized",
+    });
+
+  } catch (error) {
+    console.error("deleteUser:", error.message);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };

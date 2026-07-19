@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Plus, Eye, ShieldCheck, AlertTriangle, RefreshCw, UserCircle } from "lucide-react";
+import { Search, Plus, Eye, ShieldCheck, AlertTriangle, RefreshCw, UserCircle, Trash } from "lucide-react";
 import toast from "react-hot-toast";
-import { getUsers, getAllUsers, updateUserStatus } from "../api/users";
+import { getUsers, getAllUsers, updateUserStatus, deleteUser } from "../api/users";
 import { useAuth } from "../context/AuthContext";
 import UserModal from "../components/users/UserModal.jsx";
 import ToggleSwitch from "../components/ToggleSwitch.jsx";
@@ -66,12 +66,32 @@ export default function Users() {
         : await getUsers({ page, limit: 10, search: debouncedSearch, role: roleFilter === "all" ? undefined : roleFilter, isActive: isActiveParam });
       setUsers(data?.users ?? []);
       setPagination(data?.pagination ?? null);
+      console.log(data);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load users. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleDelete = async (targetUser) => {
+    const targetId = targetUser._id;
+    try {
+      const res = await deleteUser(targetId);
+      
+      // Check for 200 OK (Axios guarantees it's a 2xx if it reached here)
+      if (res.status === 200) {
+        toast.success("Deleted!");
+      } else {
+        toast.error("Deletion failed!");
+      }
+    } catch (err) {
+      // Axios errors will land here automatically for 4xx/5xx responses
+      toast.error(err?.response?.data?.message || `Failed to delete user: ${targetUser.name}.`);
+    } finally {
+      fetchUsers();
+    }
+  }
 
   useEffect(() => { fetchUsers(); 
   }, [page, debouncedSearch, roleFilter, statusFilter, isPlatformAdmin]);
@@ -161,6 +181,7 @@ export default function Users() {
           const userActions = [
             { label: "View", icon: Eye, onClick: () => openAction(u, "view") },
             { label: "Edit", icon: ShieldCheck, onClick: () => openAction(u, "edit"),},
+            { label: "Delete", icon: Trash, onClick: ()=>handleDelete(u)}
           ];
 
           return (
@@ -178,7 +199,7 @@ export default function Users() {
               <td className="p-4 text-foreground/70 truncate">{u.email}</td>
               <td className="p-4 text-foreground/70 truncate">{u.employeeId || "—"}</td>
               <td className="p-4"><span className="inline-flex items-center rounded-full bg-foreground/5 px-2.5 py-1 text-xs font-medium text-foreground/70">{ROLE_LABELS[u.role] || u.role}</span></td>
-              {isPlatformAdmin && <td className="p-4 text-foreground/70 truncate">{u.organization?.name || "—"}</td>}
+              {isPlatformAdmin && <td className="p-4 text-foreground/70 truncate">{u.organization || "—"}</td>}
               <td className="p-4"><ToggleSwitch isActive={u.isActive} isBusy={togglingId === currentId} onToggle={() => handleToggle(u)} /></td>
               <td className="p-4 overflow-visible">
                 <ActionsMenu actions={userActions} openUpward={openUpward} />
@@ -197,7 +218,6 @@ export default function Users() {
             : editableRolesFor(selectedUser?.role)
         }
         canEditRole={
-          modalMode === "edit" &&
           editableRolesFor(selectedUser?.role).length > 0
         }
         open={modalOpen}

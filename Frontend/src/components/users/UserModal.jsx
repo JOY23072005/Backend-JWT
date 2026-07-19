@@ -26,17 +26,19 @@ export default function UserModal({ mode, user, allowedRoles, canEditRole, open,
     let userId;
     try {
       if (isCreate) {
+          console.log("Error during creating?");
           const res = await createUser(values);
           userId = res?.user._id;
       }
       else {
-          await updateUser(user._id, {
-            name: values.name,
-            phone: values.phone,
-            gender: values.gender,
-            dob: values.dob,
-            employeeId: values.employeeId,
-          });
+          console.log("Error during updating?");
+          // await updateUser(user._id, {
+          //   name: values.name,
+          //   phone: values.phone,
+          //   gender: values.gender,
+          //   dob: values.dob,
+          //   employeeId: values.employeeId,
+          // });
 
           if (
             values.role !== user.role &&
@@ -59,8 +61,9 @@ export default function UserModal({ mode, user, allowedRoles, canEditRole, open,
       }
 
       toast.success("User updated");
-      onSuccess?.(response);
+      onSuccess?.();
     } catch (err) {
+      // console.log("yes there is something here what is causing errors");
       setError(
         err?.response?.data?.message ||
           `Failed to ${isEdit ? "update role" : "create user"}. Please try again.`

@@ -8,6 +8,7 @@ import {
   updateUserStatus,
   updateUser,
   updateUserProfileImage,
+  deleteUser,
 } from "../controllers/userManagement.controller.js";
 
 import { protectRoute } from "../middleware/auth.middleware.js";
@@ -70,6 +71,12 @@ router.patch(
   authorize("admin","sub-admin"),
   uploadSingleImage,
   updateUserProfileImage
+)
+
+router.delete(
+  "/:userId",
+  protectRoute,
+  deleteUser
 )
 
 export default router;
