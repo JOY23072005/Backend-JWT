@@ -10,6 +10,7 @@ import {
   uploadBufferToCloudinary,
   deleteCloudinaryImage,
 } from "../lib/uploadImage.js";
+import Organization from "../models/organization.model.js";
 
 export const updateRewardImage = async (
   req,
@@ -175,6 +176,7 @@ export const createReward = async (req, res) => {
     const {
       title,
       coinCost,
+      orgId,
     } = req.body;
 
     if (!title || !coinCost) {
@@ -183,8 +185,10 @@ export const createReward = async (req, res) => {
       });
     }
 
+    const organizationId = user.role === "admin"? orgId || user.organizationId : user.organizationId;
+
     const reward = await RewardCatalog.create({
-      organizationId: user.organizationId,
+      organizationId: organizationId,
       title,
       coinCost,
     });
@@ -287,6 +291,9 @@ export const deleteReward = async (req, res) => {
         message: "Reward not found",
       });
     }
+    if(req.user.role==="sub-admin" && req.user.organizationId !== reward.organizationId){
+      return res.status(403).json({message : "Permission doesn't allow to delete other organization's reward"});
+    }
 
     await deleteCloudinaryImage(
       reward.image?.publicId
@@ -311,6 +318,7 @@ export const deleteReward = async (req, res) => {
 export const uploadRewardsCSV = async (req, res) => {
   try {
     await connectDB();
+
     if (!req.file) {
       return res.status(400).json({
         message: "CSV file is required",
@@ -327,19 +335,19 @@ export const uploadRewardsCSV = async (req, res) => {
 
     const rewards = [];
 
-    const stream = streamifier
+    streamifier
       .createReadStream(req.file.buffer)
       .pipe(csv())
       .on("data", (row) => {
         rewards.push({
-          organizationId: user.organizationId,
+          organizationCode: row.organizationCode?.trim()?.toUpperCase(),
 
           title: row.title?.trim(),
 
           coinCost: Number(row.coinCost),
 
           image: {
-            url: row.imageUrl || null,
+            url: row.imageUrl?.trim() || null,
             publicId: null,
           },
 
@@ -348,10 +356,11 @@ export const uploadRewardsCSV = async (req, res) => {
       })
       .on("end", async () => {
         try {
-          const validRewards = rewards.filter(
+          let validRewards = rewards.filter(
             (reward) =>
               reward.title &&
-              !isNaN(reward.coinCost)
+              Number.isFinite(reward.coinCost) &&
+              reward.coinCost > 0
           );
 
           if (validRewards.length === 0) {
@@ -360,24 +369,80 @@ export const uploadRewardsCSV = async (req, res) => {
             });
           }
 
+          // Platform Admin -> Resolve organization codes
+          if (user.role === "admin") {
+            const codes = [
+              ...new Set(
+                validRewards.map((reward) => reward.organizationCode)
+              ),
+            ];
+
+            if (codes.some((code) => !code)) {
+              return res.status(400).json({
+                message:
+                  "organizationCode is required for every row.",
+              });
+            }
+
+            const organizations = await Organization.find({
+              code: { $in: codes },
+            }).select("_id code");
+
+            const organizationMap = new Map(
+              organizations.map((org) => [
+                org.code,
+                org._id,
+              ])
+            );
+
+            for (const reward of validRewards) {
+              const organizationId = organizationMap.get(
+                reward.organizationCode
+              );
+
+              if (!organizationId) {
+                return res.status(400).json({
+                  message: `Invalid organizationCode: ${reward.organizationCode}`,
+                });
+              }
+
+              reward.organizationId = organizationId;
+              delete reward.organizationCode;
+            }
+          } else {
+            // Organization Admin -> Use own organization
+            validRewards = validRewards.map((reward) => ({
+              organizationId: user.organizationId,
+              title: reward.title,
+              coinCost: reward.coinCost,
+              image: reward.image,
+              isActive: reward.isActive,
+            }));
+          }
+
           await RewardCatalog.insertMany(validRewards);
 
           return res.status(201).json({
             success: true,
             message: `${validRewards.length} rewards uploaded successfully`,
           });
-
         } catch (error) {
-          console.log("CSV insert error", error.message);
+          console.error("CSV insert error:", error);
 
           return res.status(500).json({
             message: "CSV processing failed",
           });
         }
-      });
+      })
+      .on("error", (error) => {
+        console.error("CSV parsing error:", error);
 
+        return res.status(500).json({
+          message: "Failed to parse CSV file",
+        });
+      });
   } catch (error) {
-    console.log("uploadRewardsCSV error", error.message);
+    console.error("uploadRewardsCSV error:", error);
 
     return res.status(500).json({
       message: "Server error",
@@ -405,9 +470,11 @@ export const getManageRewards = async (req, res) => {
     const isActive =
       req.query.isActive;
 
-    const query = {
-      organizationId: req.user.organizationId,
-    };
+    const query = {};
+
+    if(req.user.role !== "admin"){ 
+      query.organizationId= req.user.organizationId;
+    }
 
     if (search) {
       query.title = {
@@ -434,6 +501,10 @@ export const getManageRewards = async (req, res) => {
         .sort({
           createdAt: -1,
         })
+        .populate({
+          path: "organizationId",
+          select: "name",
+        })
         .skip((page - 1) * limit)
         .limit(limit);
 
@@ -448,6 +519,8 @@ export const getManageRewards = async (req, res) => {
           reward.isActive,
         createdAt:
           reward.createdAt,
+        organization:
+          reward.organizationId?.name || null
       }));
 
     const totalPages = Math.ceil(

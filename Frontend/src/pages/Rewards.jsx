@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Plus, Eye, Pencil, ToggleLeft, Gift } from "lucide-react";
+import { Search, Plus, Eye, Pencil, ToggleLeft, Gift, Trash, Upload } from "lucide-react";
 import toast from "react-hot-toast";
-import { getRewards, toggleRewardStatus } from "../api/rewards";
+import { deleteReward, getRewards, toggleRewardStatus, uploadRewardsCSV } from "../api/rewards";
 import DataTable from "../components/DataTable.jsx";
 import ActionsMenu from "../components/ActionsMenu.jsx";
 import RewardModal from "../components/rewards/RewardModal.jsx";
@@ -19,6 +19,7 @@ const tableColumns = [
   { header: "Image", className: "w-20", skeletonClass: "h-10 w-10 rounded-full" },
   { header: "Title", skeletonClass: "h-3 w-32" },
   { header: "Coin Cost", skeletonClass: "h-3 w-16" },
+  { header: "Organization", skeletonClass: "h-3 w-32" },
   { header: "Status", className: "w-24", skeletonClass: "h-5 w-16 rounded-full" },
   { header: "Created At", skeletonClass: "h-3 w-24" },
   { header: "Actions", className: "w-16", skeletonClass: "h-5 w-5" },
@@ -34,11 +35,15 @@ export default function Rewards() {
   const [error, setError] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
   const debounceRef = useRef(null);
+  const csvInputRef = useRef(null);
 
   const [selectedReward, setSelectedReward] = useState(null);
   const [modalMode, setModalMode] = useState("create");
   const [modalOpen, setModalOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const STATUS_FILTERS = [{ key: "all", label: "All" }, { key: "active", label: "Active" }, { key: "inactive", label: "Inactive" }];
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -53,7 +58,8 @@ export default function Rewards() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getRewards({ page, limit: 10, search: debouncedSearch });
+      const isActiveParam = statusFilter === "active" ? true : statusFilter === "inactive" ? false : undefined;
+      const data = await getRewards({ page, limit: 10, search: debouncedSearch, isActive: isActiveParam });
       setRewards(data?.rewards ?? []);
       setPagination(data?.pagination ?? null);
     } catch (err) {
@@ -66,7 +72,49 @@ export default function Rewards() {
   useEffect(() => {
     fetchRewards();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, statusFilter]);
+
+  const handleDelete = async (target) => {
+    const targetId = target.rewardId;
+    try {
+      const res = await deleteReward(targetId);
+      
+      console.log(res);
+
+      if (res.success) {
+        toast.success("Deleted!");
+      } else {
+        toast.error("Deletion failed!");
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || `Failed to delete reward: ${target.title}.`);
+    } finally {
+      fetchRewards();
+    }
+  }
+
+  const handleCSVUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    try {
+      const res = await uploadRewardsCSV(file);
+
+      toast.success(
+        res.message || "Rewards uploaded successfully."
+      );
+
+      fetchRewards();
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          "Failed to upload CSV."
+      );
+    } finally {
+      event.target.value = "";
+    }
+  };
 
   const handleToggleStatus = async (targetReward) => {
     const targetId = targetReward.rewardId;
@@ -98,31 +146,57 @@ export default function Rewards() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Rewards</h1>
-          <p className="mt-1 text-sm text-foreground/60">Manage redeemable rewards for employees.</p>
+          <h1 className="text-2xl font-semibold text-foreground">
+            Rewards
+          </h1>
+          <p className="mt-1 text-sm text-foreground/60">
+            Manage redeemable rewards for employees.
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setSelectedReward(null);
-            setModalMode("create");
-            setModalOpen(true);
-          }}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          <Plus size={16} /> Add Reward
-        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => csvInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-foreground/5"
+          >
+            <Upload size={16} />
+            Upload CSV
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedReward(null);
+              setModalMode("create");
+              setModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Plus size={16} />
+            Add Reward
+          </button>
+
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleCSVUpload}
+          />
+        </div>
       </div>
 
-      <div className="relative w-full sm:max-w-xs">
-        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search rewards..."
-          className="w-full rounded-md border border-border bg-card py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-foreground/40 outline-none focus:ring-2 focus:ring-primary/30"
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" />
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search users..." className="w-full rounded-md border border-border bg-card py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-foreground/40 outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+        <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+          {STATUS_FILTERS.map(f => (
+            <button key={f.key} type="button" onClick={() => { setStatusFilter(f.key); setPage(1); }} className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${statusFilter === f.key ? "bg-primary text-primary-foreground" : "text-foreground/60 hover:bg-foreground/5"}`}>{f.label}</button>
+          ))}
+        </div>
       </div>
 
       <DataTable
@@ -142,6 +216,7 @@ export default function Rewards() {
           const rewardActions = [
             { label: "View", icon: Eye, onClick: () => openAction(reward, "view") },
             { label: "Edit", icon: Pencil, onClick: () => openAction(reward, "edit") },
+            { label: "Delete", icon: Trash, onClick: () => handleDelete(reward) },
           ];
 
           return (
@@ -157,6 +232,7 @@ export default function Rewards() {
               </td>
               <td className="p-4 font-medium text-foreground truncate">{reward.title}</td>
               <td className="p-4 text-foreground/70">{reward.coinCost}</td>
+              <td className="p-4 text-foreground/70">{reward.organization}</td>
               <td className="p-4"><ToggleSwitch isActive={reward.isActive} isBusy={togglingId === currentId} onToggle={() => handleToggleStatus(reward)} /></td>
               <td className="p-4 text-foreground/70">{formatDate(reward.createdAt)}</td>
               <td className="p-4 overflow-visible">

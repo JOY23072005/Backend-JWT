@@ -23,10 +23,10 @@ export default function RewardModal({ mode, reward, open, onClose, onSuccess }) 
     setLoading(true);
     setError(null);
     try {
-      const payload = { title: values.title, coinCost: values.coinCost };
+      const payload = { title: values.title, coinCost: values.coinCost};
       let response = isEdit
         ? await updateReward(reward.rewardId, payload)
-        : await createReward(payload);
+        : await createReward({...payload, orgId: values.orgId});
 
       if (values.image) {
         const rewardId = isEdit ? reward.rewardId : response?.data?._id || response?._id;

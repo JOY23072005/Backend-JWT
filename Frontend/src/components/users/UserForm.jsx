@@ -32,6 +32,8 @@ export default function UserForm({ initialValues, loading, mode = "create", allo
   );
   const [organizations, setOrganizations] = useState([]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(true);
+  const { user } = useAuth();
+  const canChooseOrganization = user?.role === "admin";
 
   useEffect(() => {
     const fetchOrganizations = async () => {
@@ -43,10 +45,10 @@ export default function UserForm({ initialValues, loading, mode = "create", allo
       }
     };
 
-    if (isCreate && canEditRole) {
+    if (isCreate && canChooseOrganization) {
       fetchOrganizations();
     }
-  }, [isCreate, canEditRole]);
+  }, [isCreate, canChooseOrganization]);
 
   const {
   register,
@@ -211,7 +213,7 @@ export default function UserForm({ initialValues, loading, mode = "create", allo
         {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
       </div>
 
-      {isCreate && canEditRole && (
+      {isCreate && canChooseOrganization && (
         <div>
           <label
             htmlFor="orgId"

@@ -1,13 +1,36 @@
 import { useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { Image as ImageIcon, Upload, X, Loader2 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import OrganizationCombobox from "../OrganizationCombobox";
+import axiosInstance from "../../api/axios";
 
 export default function RewardForm({ initialValues, loading, onSubmit }) {
   const fileInputRef = useRef(null);
   const [imagePreview, setImagePreview] = useState(initialValues?.image_url || null);
+  const [organizations, setOrganizations] = useState([]);
+  const [isLoadingOrgs, setIsLoadingOrgs] = useState(true);
+  const { user } = useAuth();
+  const canChooseOrganization = user?.role === "admin";
+
+  useEffect(() => {
+    const fetchOrganizations = async () => {
+      try {
+        const { data } = await axiosInstance.get("/org");
+        setOrganizations(data.organizations || []);
+      } finally {
+        setIsLoadingOrgs(false);
+      }
+    };
+
+    if (!initialValues && canChooseOrganization) {
+      fetchOrganizations();
+    }
+  }, [canChooseOrganization]);
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setValue,
@@ -17,6 +40,7 @@ export default function RewardForm({ initialValues, loading, onSubmit }) {
     defaultValues: {
       title: initialValues?.title || "",
       coinCost: initialValues?.coinCost ?? "",
+      orgId: initialValues?.orgId || "",
       image: undefined,
     },
   });
@@ -27,6 +51,7 @@ export default function RewardForm({ initialValues, loading, onSubmit }) {
     reset({
       title: initialValues?.title || "",
       coinCost: initialValues?.coinCost ?? "",
+      orgId: initialValues?.orgId || "",
       image: undefined,
     });
     setImagePreview(initialValues?.image_url || null);
@@ -52,6 +77,7 @@ export default function RewardForm({ initialValues, loading, onSubmit }) {
     onSubmit?.({
       title: values.title.trim(),
       coinCost: Number(values.coinCost),
+      orgId: values.orgId,
       image: values.image?.[0] || null,
     });
   };
@@ -78,6 +104,36 @@ export default function RewardForm({ initialValues, loading, onSubmit }) {
         />
         {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title.message}</p>}
       </div>
+      
+      {canChooseOrganization && !initialValues && (
+        <div>
+          <label
+            htmlFor="orgId"
+            className="mb-1.5 block text-sm font-medium text-foreground"
+          >
+            Organization
+          </label>
+
+          <Controller
+            name="orgId"
+            control={control}
+            rules={{
+              required: "Please select an organization.",
+            }}
+            render={({ field }) => (
+              <OrganizationCombobox
+                id="orgId"
+                organizations={organizations}
+                isLoading={isLoadingOrgs}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errors.orgId?.message}
+              />
+            )}
+          />
+        </div>
+      )}
 
       <div>
         <label htmlFor="coinCost" className="mb-1.5 block text-sm font-medium text-foreground">
